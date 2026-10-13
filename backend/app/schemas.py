@@ -120,3 +120,48 @@ class ChatRequest(BaseModel):
 class SettingsPatchRequest(BaseModel):
     threshold: float | None = None
     answer_model: str | None = None
+
+
+class DocumentCreateOut(BaseModel):
+    """What POST /documents returns (AC-015): the created row's id and the
+    identifying fields the caller just supplied, plus its initial
+    'processing' status -- not the full listing shape, which also needs a
+    chunk count and uploader display name that do not exist yet for a
+    document this new."""
+
+    id: uuid.UUID
+    filename: str
+    file_type: str
+    size_bytes: int
+    status: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class DocumentOut(BaseModel):
+    """What GET /documents returns, one row per document (AC-034/AC-036)."""
+
+    id: uuid.UUID
+    filename: str
+    file_type: str
+    size_bytes: int
+    status: str
+    failure_reason: str | None = None
+    notes: str | None = None
+    chunk_count: int
+    uploaded_by: str
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class DocumentStatsOut(BaseModel):
+    """What GET /documents/stats returns, computed from the database."""
+
+    total: int
+    ready: int
+    processing: int
+    failed: int
+    chunks: int
+    bytes: int

@@ -37,14 +37,14 @@ def test_every_approved_endpoint_is_registered() -> None:
 
 
 def test_a_stub_route_returns_its_placeholder() -> None:
-    # /auth/me is real now (US-001-1): it requires a session and is covered
-    # by the auth tests, so this uses /documents/stats -- still a stub, and
-    # unauthenticated, exactly what this check needs.
-    response = client.get("/documents/stats")
+    # /documents/stats is real now (US-008-1, database-backed); it is
+    # covered by tests/test_documents.py. /documents/{id}/download is still
+    # a stub and unauthenticated, exactly what this check needs.
+    response = client.get("/documents/some-id/download")
 
     assert response.status_code == 200
     assert response.json() == {
-        "endpoint": "GET /documents/stats",
+        "endpoint": "GET /documents/{id}/download",
         "status": "not_implemented",
         "detail": "Scaffolded from the approved API spec; no behaviour yet.",
     }
