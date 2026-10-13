@@ -25,17 +25,31 @@ export class ApiError extends Error {
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  // A FormData body (file uploads) must set its own multipart boundary --
+  // forcing application/json here would corrupt the request and the server
+  // would never see the file.
+  const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
+  const headers = isFormData
+    ? { ...(init?.headers ?? {}) }
+    : { "Content-Type": "application/json", ...(init?.headers ?? {}) };
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
     // The session is an HTTP-only cookie, never a client-held token -- every
     // request must carry it, or a valid session reads as logged out.
     credentials: "include",
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    headers,
   });
   if (!response.ok) {
+    let detail = "";
+    try {
+      const body = await response.clone().json();
+      if (body && typeof body.detail === "string") detail = body.detail;
+    } catch {
+      /* non-JSON or empty error body */
+    }
     throw new ApiError(
       response.status,
-      `${init?.method ?? "GET"} ${path} failed: ${response.status}`,
+      detail || `${init?.method ?? "GET"} ${path} failed: ${response.status}`,
     );
   }
   return response.status === 204 ? (undefined as T) : ((await response.json()) as T);
