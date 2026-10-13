@@ -37,18 +37,21 @@ def test_every_approved_endpoint_is_registered() -> None:
 
 
 def test_a_stub_route_returns_its_placeholder() -> None:
-    response = client.get("/auth/me")
+    # /auth/me is real now (US-001-1): it requires a session and is covered
+    # by the auth tests, so this uses /documents/stats -- still a stub, and
+    # unauthenticated, exactly what this check needs.
+    response = client.get("/documents/stats")
 
     assert response.status_code == 200
     assert response.json() == {
-        "endpoint": "GET /auth/me",
+        "endpoint": "GET /documents/stats",
         "status": "not_implemented",
         "detail": "Scaffolded from the approved API spec; no behaviour yet.",
     }
 
 
 def test_a_no_content_route_returns_no_body() -> None:
-    response = client.post("/auth/logout")
+    response = client.delete("/conversations/some-id")
 
     assert response.status_code == 204
     assert response.content == b""

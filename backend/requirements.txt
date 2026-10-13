@@ -3,6 +3,7 @@ uvicorn[standard]==0.32.0
 sqlalchemy==2.0.35
 pydantic==2.9.2
 psycopg[binary]==3.2.3
+alembic==1.13.2
 
 # Checks. The platform installs and runs this file before it reports that the
 # generated tests pass, so the test dependencies belong here rather than in a

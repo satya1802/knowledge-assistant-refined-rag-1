@@ -5,6 +5,14 @@ the `api` component, one route per endpoint the API spec declares. Every
 generated route except `/health` is a stub that returns a typed placeholder,
 so the service starts, serves its OpenAPI document and passes its tests
 before a single handler is implemented.
+
+Startup never touches the schema or the data in it (AC-093/AC-094): there is
+no `Base.metadata.create_all` here, and there never should be again. The
+schema is created and evolved only by `alembic upgrade head`
+(`backend/alembic/`), run once before this process starts (see the
+Dockerfile's `CMD`) -- a container restart runs it again, finds every
+revision already applied, and does nothing further. A database that already
+holds users and sessions keeps every row across that restart.
 """
 
 import os
@@ -12,10 +20,14 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app import models  # noqa: F401 -- imported so the tables register before create_all
-from app.database import Base, engine
+from app.logging_config import install_logging
 from app.routers import account, auth, chat, conversations, documents, settings, users
 from app.services import configured_services
+
+# Attached before anything else in this process can log, so a stray
+# `log.exception(...)` while wiring up the app still has the AI provider
+# secret redacted (AC-098).
+install_logging()
 
 app = FastAPI(
     title="Knowledge Assistant - Refined RAG",
@@ -50,10 +62,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# The scaffold ships no migrations, so the tables are created from the models on
-# startup. Replace this with Alembic before anything holds data worth keeping.
-Base.metadata.create_all(bind=engine)
 
 app.include_router(auth.router)
 app.include_router(users.router)
