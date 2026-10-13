@@ -56,7 +56,9 @@ _ACCEPTED_CONTENT_TYPES = {
 _ACCEPTED_LABEL = "PDF, DOCX, TXT, MD"
 _MAX_SIZE_BYTES = 25 * 1024 * 1024  # AC-017
 
-_DOCUMENT_NOT_FOUND = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+_DOCUMENT_NOT_FOUND = HTTPException(
+    status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
+)
 
 
 def _resolve_file_type(filename: str, content_type: str | None) -> str | None:

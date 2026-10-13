@@ -260,9 +260,7 @@ def test_q_filter_matches_filename_case_insensitively_and_combines_with_status_a
 
     # status + type + q combine as an AND: only alpha is ready, txt, and
     # matches "quarterly" -- beta is excluded by status and type, gamma by q.
-    combined = client.get(
-        "/documents", params={"q": "quarterly", "status": "ready", "type": "txt"}
-    )
+    combined = client.get("/documents", params={"q": "quarterly", "status": "ready", "type": "txt"})
     combined_ids = {row["id"] for row in combined.json()}
     assert combined_ids == {alpha["id"]}
 

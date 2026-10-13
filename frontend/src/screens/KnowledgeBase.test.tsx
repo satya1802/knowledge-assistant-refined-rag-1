@@ -318,30 +318,28 @@ describe("KnowledgeBase screen", () => {
     await user.click(within(dialog).getByRole("button", { name: /^delete$/i }));
 
     await waitFor(() => expect(screen.queryByText("to-delete.pdf")).not.toBeInTheDocument());
-    await waitFor(() => expect(screen.getByText("Total").closest("div")?.textContent).toContain("0"));
+    await waitFor(() =>
+      expect(screen.getByText("Total").closest("div")?.textContent).toContain("0"),
+    );
   });
 
-  it(
-    "a document in Processing moves to Ready with no manual refresh once backend processing completes (AC-019/AC-024)",
-    async () => {
-      const processingDoc = doc({ id: "p-1", filename: "pending.pdf", status: "processing" });
-      const { fetchMock, setDocuments } = makeFetch({ role: "admin", documents: [processingDoc] });
-      vi.stubGlobal("fetch", fetchMock);
-      renderKB();
+  it("a document in Processing moves to Ready with no manual refresh once backend processing completes (AC-019/AC-024)", async () => {
+    const processingDoc = doc({ id: "p-1", filename: "pending.pdf", status: "processing" });
+    const { fetchMock, setDocuments } = makeFetch({ role: "admin", documents: [processingDoc] });
+    vi.stubGlobal("fetch", fetchMock);
+    renderKB();
 
-      const row = await screen.findByRole("row", { name: /pending\.pdf/i });
-      expect(within(row).getByText("processing")).toBeInTheDocument();
+    const row = await screen.findByRole("row", { name: /pending\.pdf/i });
+    expect(within(row).getByText("processing")).toBeInTheDocument();
 
-      setDocuments([{ ...processingDoc, status: "ready" }]);
+    setDocuments([{ ...processingDoc, status: "ready" }]);
 
-      await waitFor(
-        () => {
-          const updatedRow = screen.getByRole("row", { name: /pending\.pdf/i });
-          expect(within(updatedRow).getByText("ready")).toBeInTheDocument();
-        },
-        { timeout: 7000 },
-      );
-    },
-    8000,
-  );
+    await waitFor(
+      () => {
+        const updatedRow = screen.getByRole("row", { name: /pending\.pdf/i });
+        expect(within(updatedRow).getByText("ready")).toBeInTheDocument();
+      },
+      { timeout: 7000 },
+    );
+  }, 8000);
 });
