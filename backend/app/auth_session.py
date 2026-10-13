@@ -43,9 +43,7 @@ def create_session(db: DBSession, user_id) -> tuple[str, SessionModel]:
 
 def get_session_user(db: DBSession, token: str) -> User | None:
     """The user a still-valid, unrevoked session token belongs to, or None."""
-    session = (
-        db.query(SessionModel).filter(SessionModel.token_hash == _hash_token(token)).first()
-    )
+    session = db.query(SessionModel).filter(SessionModel.token_hash == _hash_token(token)).first()
     if session is None:
         return None
     if session.revoked_at is not None:
@@ -57,9 +55,7 @@ def get_session_user(db: DBSession, token: str) -> User | None:
 
 def revoke_session(db: DBSession, token: str) -> None:
     """Deletes the session row for `token`, if one exists (AC-005)."""
-    session = (
-        db.query(SessionModel).filter(SessionModel.token_hash == _hash_token(token)).first()
-    )
+    session = db.query(SessionModel).filter(SessionModel.token_hash == _hash_token(token)).first()
     if session is not None:
         db.delete(session)
         db.commit()

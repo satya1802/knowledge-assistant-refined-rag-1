@@ -15,7 +15,7 @@ function renderSignIn() {
           <Route path="/chat" element={<div>Chat screen</div>} />
         </Routes>
       </AuthProvider>
-    </MemoryRouter>
+    </MemoryRouter>,
   );
 }
 
@@ -50,10 +50,9 @@ describe("SignIn", () => {
     // The screen shows a brief "session established" state before the
     // navigate() call fires on its own timer -- the real delay, not a
     // simulated auth check.
-    await waitFor(
-      () => expect(screen.getByText("Chat screen")).toBeInTheDocument(),
-      { timeout: 3000 }
-    );
+    await waitFor(() => expect(screen.getByText("Chat screen")).toBeInTheDocument(), {
+      timeout: 3000,
+    });
 
     const loginCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/auth/login"));
     expect(loginCall).toBeTruthy();
@@ -81,7 +80,7 @@ describe("SignIn", () => {
     await user.click(screen.getByRole("button", { name: /sign in/i }));
 
     await waitFor(() =>
-      expect(screen.getByText("Email or password is incorrect")).toBeInTheDocument()
+      expect(screen.getByText("Email or password is incorrect")).toBeInTheDocument(),
     );
   });
 
@@ -108,8 +107,8 @@ describe("SignIn", () => {
 
     await waitFor(() =>
       expect(
-        screen.getByText(/this installation already has an administrator/i)
-      ).toBeInTheDocument()
+        screen.getByText(/this installation already has an administrator/i),
+      ).toBeInTheDocument(),
     );
 
     const createCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/users"));

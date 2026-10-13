@@ -44,18 +44,14 @@ async def create_user(
         # cookie (401 when missing/invalid) and require admin (403 otherwise).
         caller = current_user(request, db)
         if caller.role != "admin":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN, detail="Admin required"
-            )
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin required")
         role = "user"
     else:
         role = "admin"
 
     email = payload.email.lower()
     if db.query(User.id).filter(User.email == email).first() is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="Email already registered"
-        )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
 
     user = User(
         email=email,
@@ -79,9 +75,7 @@ async def patch_user(
     try:
         parsed_id = uuid.UUID(user_id)
     except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found") from exc
 
     user = db.query(User).filter(User.id == parsed_id).first()
     if user is None:

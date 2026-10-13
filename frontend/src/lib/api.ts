@@ -7,8 +7,7 @@
 //
 // Set at build time: the platform bakes the deployed API URL into the frontend build. The
 // fallback is the local backend so a bare `npm run dev` still points somewhere real.
-export const API_BASE_URL: string =
-  import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
+export const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
 /**
  * Thrown by `apiFetch` on any non-2xx response. Carries the HTTP status so
@@ -36,7 +35,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   if (!response.ok) {
     throw new ApiError(
       response.status,
-      `${init?.method ?? "GET"} ${path} failed: ${response.status}`
+      `${init?.method ?? "GET"} ${path} failed: ${response.status}`,
     );
   }
   return response.status === 204 ? (undefined as T) : ((await response.json()) as T);

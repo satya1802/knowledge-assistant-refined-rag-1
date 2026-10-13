@@ -9,7 +9,7 @@ describe("App", () => {
   beforeEach(() => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({}) })
+      vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({}) }),
     );
   });
 
@@ -19,7 +19,7 @@ describe("App", () => {
         <AuthProvider>
           <App />
         </AuthProvider>
-      </MemoryRouter>
+      </MemoryRouter>,
     );
     // getAllByText, not getByText: the first screen's page content may repeat
     // the text its nav link carries, and two matches must not fail the smoke test.
@@ -32,7 +32,7 @@ describe("App", () => {
         <AuthProvider>
           <App />
         </AuthProvider>
-      </MemoryRouter>
+      </MemoryRouter>,
     );
     await waitFor(() => expect(screen.getAllByText("Sign In").length).toBeGreaterThan(0));
   });
@@ -43,7 +43,7 @@ describe("App", () => {
         <AuthProvider>
           <App />
         </AuthProvider>
-      </MemoryRouter>
+      </MemoryRouter>,
     );
     await waitFor(() => expect(screen.getAllByText("Documentation").length).toBeGreaterThan(0));
   });

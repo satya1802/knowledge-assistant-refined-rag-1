@@ -87,7 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { ok: false, error: "Something went wrong. Try again." };
       }
     },
-    []
+    [],
   );
 
   const logout = React.useCallback(async () => {
@@ -103,7 +103,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const value = React.useMemo<AuthContextValue>(
     () => ({ status, user, login, bootstrap, logout }),
-    [status, user, login, bootstrap, logout]
+    [status, user, login, bootstrap, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

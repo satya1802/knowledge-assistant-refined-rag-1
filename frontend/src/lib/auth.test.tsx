@@ -21,7 +21,7 @@ function renderConsumer() {
   return render(
     <AuthProvider>
       <Consumer />
-    </AuthProvider>
+    </AuthProvider>,
   );
 }
 
@@ -37,7 +37,7 @@ describe("AuthProvider / useAuth", () => {
         ok: true,
         status: 200,
         json: async () => ({ id: "1", email: "a@b.com", role: "member", is_active: true }),
-      })
+      }),
     );
     renderConsumer();
     await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent("authenticated"));
@@ -47,7 +47,7 @@ describe("AuthProvider / useAuth", () => {
   it("is unauthenticated when GET /auth/me returns 401", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({}) })
+      vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({}) }),
     );
     renderConsumer();
     await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent("unauthenticated"));
@@ -75,7 +75,7 @@ describe("AuthProvider / useAuth", () => {
           status: 200,
           json: async () => ({ id: "1", email: "a@b.com", role: "member", is_active: true }),
         });
-      })
+      }),
     );
     renderConsumer();
     await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent("unauthenticated"));
@@ -120,7 +120,7 @@ describe("AuthProvider / useAuth", () => {
           return Promise.resolve({ ok: false, status: 409, json: async () => ({}) });
         }
         return Promise.reject(new Error("unexpected " + url));
-      })
+      }),
     );
     const results: unknown[] = [];
     function BootstrapConsumer() {
@@ -141,7 +141,7 @@ describe("AuthProvider / useAuth", () => {
     render(
       <AuthProvider>
         <BootstrapConsumer />
-      </AuthProvider>
+      </AuthProvider>,
     );
     await waitFor(() => expect(screen.getByTestId("status")).toHaveTextContent("unauthenticated"));
     await user.click(screen.getByText("bootstrap"));
