@@ -37,9 +37,7 @@ def extract_segments(file_type: str, data: bytes) -> list[Segment]:
         text = data.decode("utf-8", errors="replace")
         return [Segment(text=text)]
 
-    raise ExtractionUnavailable(
-        f"Text extraction for '{file_type}' files is not available yet."
-    )
+    raise ExtractionUnavailable(f"Text extraction for '{file_type}' files is not available yet.")
 
 
 __all__ = ["ExtractionUnavailable", "extract_segments"]

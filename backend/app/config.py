@@ -69,9 +69,7 @@ def embedding_status() -> FeatureStatus:
                 "(see backend/docs/decisions/0001-embedding-provider.md)."
             ),
         )
-    return _require(
-        [f"{provider.upper()}_EMBEDDING_API_KEY"], f"Embedding provider '{provider}'"
-    )
+    return _require([f"{provider.upper()}_EMBEDDING_API_KEY"], f"Embedding provider '{provider}'")
 
 
 def ocr_min_text_chars(default: int = 20) -> int:
