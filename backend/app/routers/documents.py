@@ -4,11 +4,14 @@ POST /documents, GET /documents and GET /documents/stats are real and
 database-backed (US-008-1): an admin uploads a supported file, its original
 bytes go to object storage (or local disk when S3 is not configured -- see
 `app/storage.py`), and a `Document` row is created with status
-'processing'. The worker component (text extraction, OCR, chunking,
-embedding) that later moves a document to 'ready' or 'failed' does not
-exist yet -- that is later development-sprint work (US-009, US-016,
-US-020); `/documents/{id}/download`, `/documents/{id}/reprocess` and
-`DELETE /documents/{id}` stay stubs here for the same reason.
+'processing'. That row is then handed to the background worker
+(`app/worker.py`, US-019-2/US-020) via `enqueue_processing` -- the request
+returns as soon as the row is committed, never waiting on extraction,
+chunking or embedding, and the worker later moves the row to 'ready' or
+'failed' on its own, independent of this request's session or the
+uploading client staying connected. `/documents/{id}/download`,
+`/documents/{id}/reprocess` and `DELETE /documents/{id}` stay stubs here
+for later development-sprint work.
 
 `/stats` is declared ahead of the `{document_id}` routes so a literal path
 segment is never swallowed by a path parameter.
@@ -32,6 +35,7 @@ from app.schemas import (
     StubResponse,
 )
 from app.storage import store_object
+from app.worker import enqueue_processing
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
@@ -95,6 +99,11 @@ async def upload_document(
     db.add(document)
     db.commit()
     db.refresh(document)
+
+    # AC-047: handed to the background worker; this request never waits on
+    # extraction, chunking or embedding.
+    enqueue_processing(document.id)
+
     return document
 
 

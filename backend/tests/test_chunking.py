@@ -106,7 +106,7 @@ def test_chunks_stay_near_target_size_overlap_and_break_in_the_latter_half() -> 
         assert len(draft.content) >= target // 2
         assert len(draft.content) <= ceiling
 
-    for first, second in zip(drafts, drafts[1:]):
+    for first, second in zip(drafts, drafts[1:], strict=False):
         # Consecutive chunks actually share overlapping text: a slice from
         # near the end of the first chunk re-appears at the start of the
         # second.
