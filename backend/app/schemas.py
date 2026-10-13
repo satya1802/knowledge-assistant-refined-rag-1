@@ -40,6 +40,7 @@ class UserOut(BaseModel):
     email: str
     role: str
     is_active: bool
+    theme: Literal["light", "dark", "system"] = "system"
 
     model_config = {"from_attributes": True}
 
@@ -88,7 +89,18 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
+class ChangePasswordResponse(BaseModel):
+    """Confirms the password change without echoing anything secret
+    (AC-080): just a success flag the UI can show a message against."""
+
+    status: str = "ok"
+
+
 class ThemeRequest(BaseModel):
+    theme: Literal["light", "dark", "system"]
+
+
+class ThemeResponse(BaseModel):
     theme: Literal["light", "dark", "system"]
 
 
