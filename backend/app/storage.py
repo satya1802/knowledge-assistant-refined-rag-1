@@ -1,11 +1,15 @@
-"""Where an uploaded document's original bytes are written.
+"""Where an uploaded document's original bytes are written and read back.
 
 Reads whether object storage (S3) is configured through
 `app.config.s3_status()` at the point of use -- never at import time, so a
 missing key never breaks startup. When it is not configured, the bytes go
-to a local directory instead (`STORAGE_DIR`, default `./storage_data`),
-with a clear log line explaining why, so local development and CI never
-need real AWS credentials.
+to (and are read from) a local directory instead (`STORAGE_DIR`, default
+`./storage_data`), with a clear log line explaining why, so local
+development and CI never need real AWS credentials.
+
+Every object read and delete in this service goes through `load_object` and
+`delete_object` here -- no router or worker module makes its own boto3 or
+filesystem call.
 """
 
 import logging
@@ -45,6 +49,28 @@ def store_object(key: str, data: bytes) -> str:
     )
     client.put_object(Bucket=os.environ["S3_BUCKET"], Key=key, Body=data)
     return key
+
+
+def load_object(key: str) -> bytes:
+    """Reads back the original bytes stored under `key`: from S3 when
+    object storage is configured, else from local disk under
+    `STORAGE_DIR`. The one place any caller (a download route, the
+    background worker) reads an original file's bytes back."""
+    status = s3_status()
+    if not status.enabled:
+        path = _local_storage_dir() / key
+        return path.read_bytes()
+
+    import boto3  # imported here, not at module load, per app/config.py's rule
+
+    client = boto3.client(
+        "s3",
+        region_name=os.environ["AWS_REGION"],
+        aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
+        aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
+    )
+    response = client.get_object(Bucket=os.environ["S3_BUCKET"], Key=key)
+    return response["Body"].read()
 
 
 def delete_object(key: str) -> None:
