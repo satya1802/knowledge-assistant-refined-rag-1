@@ -2,12 +2,13 @@
 
 Request bodies are typed from the approved API spec so the OpenAPI document
 and any generated client are accurate before a single handler does real
-work. Responses stay the generic `StubResponse` below -- the actual response
-shapes (and the behaviour that fills them) are development-sprint work, one
-endpoint at a time.
+work. Responses stay the generic `StubResponse` below for endpoints that are
+still stubs -- the actual response shapes (and the behaviour that fills
+them) are development-sprint work, one endpoint at a time.
 """
 
 import uuid
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel
@@ -43,18 +44,31 @@ class UserOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class UserListOut(UserOut):
+    """The shape GET /users returns: `UserOut` plus `created_at`."""
+
+    created_at: datetime
+
+
 class LoginResponse(BaseModel):
     user: UserOut
 
 
 class CreateUserRequest(BaseModel):
+    """POST /users body (US-001-2 / AC-009 / AC-010).
+
+    No `role` field: the server alone decides role (admin only for the very
+    first account, 'user' for every account after that) -- there is nothing
+    for a caller to supply or for the server to ignore.
+    """
+
     email: str
-    temp_password: str
-    role: str
+    password: str
 
 
 class PatchUserRequest(BaseModel):
     is_active: bool | None = None
+    password: str | None = None
     role: str | None = None
 
 
