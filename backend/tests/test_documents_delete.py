@@ -14,6 +14,16 @@ TestClient per actor, the established pattern in this suite (see
 test_documents_upload.py). `STORAGE_DIR` is redirected to a pytest tmp
 directory so nothing here touches real AWS, and the worker pipeline is
 driven directly via `process_document(...)` -- never a real thread.
+
+The real embedding provider is disabled by default (`EMBEDDING_PROVIDER` is
+unset -- see `app/embedding.py`), which would otherwise leave every
+successfully-chunked document 'failed' rather than 'ready'. These tests
+care about the document lifecycle, filtering and stats, not about a real
+embedding call, so an autouse fixture patches `app/worker.py`'s
+`index_document` to use an in-memory fake provider -- the same technique
+`tests/test_embedding.py` uses -- so a document with extractable text
+reaches 'ready' here exactly as it would once a real provider is
+configured.
 """
 
 import uuid
@@ -22,13 +32,31 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+import app.worker as worker_module
 from app.database import Base, SessionLocal, engine
+from app.embedding import index_document as _real_index_document
 from app.main import app
 from app.models import Chunk, Document, User
 from app.security import hash_password
 from app.worker import process_document
 
 _PASSWORD = "DeleteSeedPass123!"
+
+
+class _FakeEmbeddingProvider:
+    """Returns one fixed-dimension vector per input text, in order -- never
+    calls a real embedding service."""
+
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        return [[0.1] * 768 for _ in texts]
+
+
+@pytest.fixture(autouse=True)
+def _fake_embedding_provider(monkeypatch):
+    def _patched_index_document(db, document, provider=None):
+        return _real_index_document(db, document, provider=provider or _FakeEmbeddingProvider())
+
+    monkeypatch.setattr(worker_module, "index_document", _patched_index_document)
 
 
 @pytest.fixture(autouse=True)
@@ -234,9 +262,7 @@ def test_processing_that_raises_marks_the_document_failed_and_keeps_the_row_and_
 # --------------------------------------------------------------------- #
 
 
-def test_q_filter_matches_filename_case_insensitively_and_combines_with_status_and_type_as_and() -> (
-    None
-):
+def test_q_filter_matches_filename_case_insensitively_and_combines_as_and() -> None:
     client, _ = _admin_client()
 
     alpha = client.post(
@@ -260,7 +286,9 @@ def test_q_filter_matches_filename_case_insensitively_and_combines_with_status_a
 
     # status + type + q combine as an AND: only alpha is ready, txt, and
     # matches "quarterly" -- beta is excluded by status and type, gamma by q.
-    combined = client.get("/documents", params={"q": "quarterly", "status": "ready", "type": "txt"})
+    combined = client.get(
+        "/documents", params={"q": "quarterly", "status": "ready", "type": "txt"}
+    )
     combined_ids = {row["id"] for row in combined.json()}
     assert combined_ids == {alpha["id"]}
 
