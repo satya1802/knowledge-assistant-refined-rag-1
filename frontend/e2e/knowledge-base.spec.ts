@@ -1,9 +1,12 @@
 import { expect, test } from "@playwright/test";
 
 // US-008-3: Knowledge Base document table is fetched from the real API
-// (AC-036), client-side format/size validation on upload shows the right
-// message (AC-016/AC-017), and the role boundary hides every
-// document-management control from a standard user (AC-018).
+// (AC-036) and survives reload and sign-out/sign-in (AC-034), a real upload
+// fires POST /documents and shows Processing (AC-015), client-side
+// format/size validation on upload shows the right message and never fires
+// a request (AC-016/AC-017), and the role boundary hides every
+// document-management control from a standard user, whose session is also
+// refused server-side (AC-018).
 //
 // Each test provisions its own administrator through the open "first
 // account" bootstrap endpoint (see users-admin-provisioning.spec.ts for
@@ -86,13 +89,20 @@ test.describe("Knowledge Base document table and upload validation", () => {
     );
   });
 
-  test("admin's document table comes from a stubbed GET /documents and survives a reload (AC-036)", async ({
+  test("admin's document table comes from a stubbed GET /documents and survives a reload and a sign-out/sign-in (AC-036/AC-034)", async ({
     page,
   }) => {
     const suffix = uniqueSuffix();
     const stub = stubDocumentsResponse(suffix);
 
     await page.route(`${apiBaseURL}/documents`, async (route) => {
+      if (route.request().method() === "GET") {
+        await route.fulfill({ status: 200, json: stub });
+      } else {
+        await route.continue();
+      }
+    });
+    await page.route(`${apiBaseURL}/documents?*`, async (route) => {
       if (route.request().method() === "GET") {
         await route.fulfill({ status: 200, json: stub });
       } else {
@@ -113,17 +123,90 @@ test.describe("Knowledge Base document table and upload validation", () => {
 
     await expect(page.getByText(stub[0].filename)).toBeVisible();
     await expect(page.getByText(stub[1].filename)).toBeVisible();
+
+    // AC-034: the same rows reappear after a full sign-out/sign-in, not
+    // just a reload -- proving nothing is cached client-side across the
+    // session boundary.
+    await page.getByRole("button", { name: /sign out/i }).click();
+    await page.waitForURL(/\/sign-in$/);
+    await signIn(page, adminEmail, ADMIN_PASSWORD);
+    await page.goto("/knowledge-base");
+
+    await expect(page.getByText(stub[0].filename)).toBeVisible();
+    await expect(page.getByText(stub[1].filename)).toBeVisible();
   });
 
-  test("an oversize stubbed file shows the size-limit message and an unsupported file shows the accepted-formats message (AC-016/AC-017)", async ({
+  test("uploading a small supported .md file fires a POST /documents multipart request and the new row shows Processing (AC-015)", async ({
     page,
   }) => {
+    const suffix = uniqueSuffix();
+    const uploadedFilename = `qa-upload-${suffix}.md`;
+    let postRequestSeen = false;
+    let sawMultipart = false;
+
     await page.route(`${apiBaseURL}/documents`, async (route) => {
-      if (route.request().method() === "GET") {
+      const request = route.request();
+      if (request.method() === "GET") {
         await route.fulfill({ status: 200, json: [] });
-      } else {
-        await route.continue();
+        return;
       }
+      if (request.method() === "POST") {
+        postRequestSeen = true;
+        const contentType = request.headers()["content-type"] ?? "";
+        sawMultipart = contentType.includes("multipart/form-data");
+        await route.fulfill({
+          status: 201,
+          json: {
+            id: `qa-upload-doc-${suffix}`,
+            filename: uploadedFilename,
+            file_type: "md",
+            size_bytes: 42,
+            status: "processing",
+            failure_reason: null,
+            notes: null,
+            chunk_count: 0,
+            uploaded_by: "qa-stub@example.com",
+            created_at: new Date().toISOString(),
+          },
+        });
+        return;
+      }
+      await route.continue();
+    });
+
+    await signIn(page, adminEmail, ADMIN_PASSWORD);
+    await page.goto("/knowledge-base");
+
+    const fileInput = page.locator('input[type="file"]');
+    await fileInput.setInputFiles({
+      name: uploadedFilename,
+      mimeType: "text/markdown",
+      buffer: Buffer.from("# QA upload\n\nSmall supported markdown file."),
+    });
+
+    await expect.poll(() => postRequestSeen).toBe(true);
+    expect(sawMultipart).toBe(true);
+
+    const newRow = page.getByRole("row").filter({ hasText: uploadedFilename });
+    await expect(newRow).toBeVisible();
+    await expect(newRow.getByText(/processing/i)).toBeVisible();
+  });
+
+  test("an oversize stubbed file shows the size-limit message and an unsupported file shows the accepted-formats message, and neither fires a POST /documents (AC-016/AC-017)", async ({
+    page,
+  }) => {
+    let postCount = 0;
+
+    await page.route(`${apiBaseURL}/documents`, async (route) => {
+      const request = route.request();
+      if (request.method() === "GET") {
+        await route.fulfill({ status: 200, json: [] });
+        return;
+      }
+      if (request.method() === "POST") {
+        postCount += 1;
+      }
+      await route.continue();
     });
 
     await signIn(page, adminEmail, ADMIN_PASSWORD);
@@ -150,9 +233,13 @@ test.describe("Knowledge Base document table and upload validation", () => {
     await expect(page.getByText(/docx/i)).toBeVisible();
     await expect(page.getByText(/txt/i)).toBeVisible();
     await expect(page.getByText(/md/i)).toBeVisible();
+
+    // Neither rejected file should ever have reached the server.
+    await page.waitForTimeout(500);
+    expect(postCount).toBe(0);
   });
 
-  test("a standard user sees no dropzone, no Browse button and no Delete action (AC-018)", async ({
+  test("a standard user sees no dropzone, Browse, Retry/Re-index or Delete control, and a direct POST /documents from that session is refused (AC-018)", async ({
     page,
     context,
   }) => {
@@ -183,6 +270,21 @@ test.describe("Knowledge Base document table and upload validation", () => {
 
     await expect(page.getByRole("button", { name: /browse/i })).toHaveCount(0);
     await expect(page.getByRole("button", { name: /delete/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /retry/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /re-?index/i })).toHaveCount(0);
     await expect(page.getByText(/drag\s*(and|&)?\s*drop/i)).toHaveCount(0);
+
+    // Even if a standard user forged the request directly (bypassing any
+    // client-side hiding), the backend itself must refuse it.
+    const directUpload = await page.request.post(`${apiBaseURL}/documents`, {
+      multipart: {
+        file: {
+          name: "forged.txt",
+          mimeType: "text/plain",
+          buffer: Buffer.from("should be refused"),
+        },
+      },
+    });
+    expect(directUpload.status()).toBe(403);
   });
 });
