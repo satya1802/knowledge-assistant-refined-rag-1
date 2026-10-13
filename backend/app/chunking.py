@@ -179,9 +179,7 @@ def chunk_text(segments: list[Segment]) -> list[ChunkDraft]:
         if content:
             page_ref, section_ref = _lookup_ref(offset_map, start)
             drafts.append(
-                ChunkDraft(
-                    index=index, content=content, page_ref=page_ref, section_ref=section_ref
-                )
+                ChunkDraft(index=index, content=content, page_ref=page_ref, section_ref=section_ref)
             )
             index += 1
 
