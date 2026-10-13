@@ -8,8 +8,12 @@ import { AuthProvider } from "@/lib/auth";
 import { ThemeProvider } from "@/lib/theme";
 
 type Overrides = {
-  password?: (init: RequestInit) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
-  theme?: (init: RequestInit) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
+  password?: (
+    init: RequestInit,
+  ) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
+  theme?: (
+    init: RequestInit,
+  ) => Promise<{ ok: boolean; status: number; json: () => Promise<unknown> }>;
 };
 
 function mockFetch(overrides: Overrides = {}) {
@@ -19,7 +23,13 @@ function mockFetch(overrides: Overrides = {}) {
         ok: true,
         status: 200,
         json: async () => ({
-          user: { id: "1", email: "dana@example.com", role: "member", is_active: true, theme: "dark" },
+          user: {
+            id: "1",
+            email: "dana@example.com",
+            role: "member",
+            is_active: true,
+            theme: "dark",
+          },
         }),
       });
     }

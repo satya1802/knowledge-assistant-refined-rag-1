@@ -216,9 +216,7 @@ export default function Screen() {
   const sectionHeadCls = "text-[11px] font-semibold uppercase tracking-[0.16em]";
 
   const initials = (user?.email || "?").slice(0, 2).toUpperCase();
-  const roleLabel = user?.role
-    ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
-    : "Member";
+  const roleLabel = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : "Member";
 
   const handleSignOut = async () => {
     await logout();
@@ -664,9 +662,8 @@ export default function Screen() {
                 ))}
               </ul>
               <p className="mt-3 text-xs" style={{ color: t.dim }}>
-                You are signed in as a {roleLabel}. Your workspace administrator can grant the
-                admin role from Users &amp; Settings — the app does not send email, so ask them
-                directly.
+                You are signed in as a {roleLabel}. Your workspace administrator can grant the admin
+                role from Users &amp; Settings — the app does not send email, so ask them directly.
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button
