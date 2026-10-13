@@ -97,12 +97,8 @@ def test_locked_window_rejects_the_correct_password_with_the_generic_body(set_no
     user = _make_user(email, failed_attempts=5, locked_until=t0 + timedelta(minutes=15))
 
     set_now(t0 + timedelta(minutes=5))
-    wrong_response = client.post(
-        "/auth/login", json={"email": email, "password": _WRONG}
-    )
-    correct_response = client.post(
-        "/auth/login", json={"email": email, "password": _PASSWORD}
-    )
+    wrong_response = client.post("/auth/login", json={"email": email, "password": _WRONG})
+    correct_response = client.post("/auth/login", json={"email": email, "password": _PASSWORD})
 
     assert wrong_response.status_code == 401
     assert correct_response.status_code == 401
@@ -149,12 +145,8 @@ def test_unknown_email_creates_no_lock_state_and_returns_the_generic_body(set_no
     t0 = datetime(2024, 1, 1, 12, 0, 0)
     set_now(t0)
 
-    unknown_response = client.post(
-        "/auth/login", json={"email": unknown_email, "password": _WRONG}
-    )
-    known_response = client.post(
-        "/auth/login", json={"email": known_email, "password": _WRONG}
-    )
+    unknown_response = client.post("/auth/login", json={"email": unknown_email, "password": _WRONG})
+    known_response = client.post("/auth/login", json={"email": known_email, "password": _WRONG})
 
     assert unknown_response.status_code == 401
     assert unknown_response.json() == known_response.json()
