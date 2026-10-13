@@ -13,8 +13,9 @@ never drops or re-creates a table that already holds data (AC-093).
 from __future__ import annotations
 
 import sqlalchemy as sa
-from alembic import op
 from pgvector.sqlalchemy import Vector
+
+from alembic import op
 
 revision = "0001_initial"
 down_revision = None
@@ -85,9 +86,7 @@ def upgrade() -> None:
     op.create_table(
         "messages",
         sa.Column("id", sa.Uuid(), primary_key=True),
-        sa.Column(
-            "conversation_id", sa.Uuid(), sa.ForeignKey("conversations.id"), nullable=False
-        ),
+        sa.Column("conversation_id", sa.Uuid(), sa.ForeignKey("conversations.id"), nullable=False),
         sa.Column("role", sa.String(length=16), nullable=False),
         sa.Column("content", sa.Text(), nullable=False),
         sa.Column("from_documents", sa.Boolean(), nullable=False, server_default=sa.false()),

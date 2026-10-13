@@ -35,9 +35,7 @@ class Settings:
     `groq_api_key` is not -- see the module docstring."""
 
     ai_provider: str = field(default_factory=lambda: _env("AI_PROVIDER", "groq"))
-    answer_model: str = field(
-        default_factory=lambda: _env("ANSWER_MODEL", "llama-3.1-8b-instant")
-    )
+    answer_model: str = field(default_factory=lambda: _env("ANSWER_MODEL", "llama-3.1-8b-instant"))
     embedding_model: str = field(
         default_factory=lambda: _env("EMBEDDING_MODEL", "nomic-embed-text-v1.5")
     )
