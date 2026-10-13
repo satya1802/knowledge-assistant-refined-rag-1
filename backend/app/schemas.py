@@ -45,9 +45,20 @@ class UserOut(BaseModel):
 
 
 class UserListOut(UserOut):
-    """The shape GET /users returns: `UserOut` plus `created_at`."""
+    """The shape GET /users returns: `UserOut` plus `created_at`. Never a
+    password (AC-011): GET /users and `/auth/me` only ever carry this shape
+    or `UserOut`, neither of which has a password field."""
 
     created_at: datetime
+
+
+class CreateUserResponse(UserOut):
+    """The shape POST /users returns (AC-011): the persisted account plus
+    the temporary password the caller supplied for it, present in this one
+    response body and nowhere else -- not in GET /users, not in
+    `/auth/me`, and not emailed anywhere."""
+
+    temporary_password: str
 
 
 class LoginResponse(BaseModel):

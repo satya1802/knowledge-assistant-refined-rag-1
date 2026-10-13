@@ -7,6 +7,12 @@ account creation is open -- unauthenticated -- for exactly as long as the
 authenticated administrator and is always created as role 'user'; nothing a
 caller supplies in the request body can change that (AC-010) -- the request
 schema does not even accept a role.
+
+POST /users returns the password the caller just set for the new account
+exactly once, in that response body only (AC-011): no other endpoint -- not
+GET /users, not `/auth/me` -- ever carries it, and no email is sent. Role
+changes (grant or removal of 'admin') happen only through PATCH
+/users/{id}, never at creation time.
 """
 
 import uuid
@@ -17,7 +23,7 @@ from sqlalchemy.orm import Session as DBSession
 from app.database import get_db
 from app.deps import current_user, require_admin
 from app.models import User
-from app.schemas import CreateUserRequest, PatchUserRequest, UserListOut, UserOut
+from app.schemas import CreateUserRequest, CreateUserResponse, PatchUserRequest, UserListOut, UserOut
 from app.security import hash_password
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -31,17 +37,18 @@ async def list_users(
     return db.query(User).order_by(User.created_at).all()
 
 
-@router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=CreateUserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     payload: CreateUserRequest,
     request: Request,
     db: DBSession = Depends(get_db),  # noqa: B008
-) -> User:
+) -> CreateUserResponse:
     has_any_user = db.query(User.id).first() is not None
 
     if has_any_user:
         # Not the bootstrap case: resolve the caller from their session
-        # cookie (401 when missing/invalid) and require admin (403 otherwise).
+        # cookie (401 when missing/invalid/disabled) and require admin
+        # (403 otherwise) -- AC-014.
         caller = current_user(request, db)
         if caller.role != "admin":
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin required")
@@ -62,7 +69,18 @@ async def create_user(
     db.add(user)
     db.commit()
     db.refresh(user)
-    return user
+
+    # The plaintext only ever lives in this local variable and this one
+    # response body -- it is never logged (see app/logging_config.py /
+    # app/security.py) and never persisted anywhere but as the bcrypt hash
+    # already committed above.
+    return CreateUserResponse(
+        id=user.id,
+        email=user.email,
+        role=user.role,
+        is_active=user.is_active,
+        temporary_password=payload.password,
+    )
 
 
 @router.patch("/{user_id}", response_model=UserOut)
@@ -82,10 +100,15 @@ async def patch_user(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     if payload.is_active is not None:
+        # Takes effect immediately: app/deps.current_user rejects the
+        # disabled user's next request on their existing session (AC-012).
         user.is_active = payload.is_active
     if payload.password is not None:
         user.password_hash = hash_password(payload.password)
     if payload.role is not None:
+        # Grants or removes 'admin'; the new role is live on the very next
+        # request because require_admin re-reads this row every time
+        # (AC-013) -- nothing here is cached.
         user.role = payload.role
 
     db.commit()
