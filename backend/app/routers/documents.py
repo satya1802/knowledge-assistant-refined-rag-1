@@ -15,7 +15,7 @@ router = APIRouter(prefix="/documents", tags=["documents"])
 
 
 @router.post("", response_model=StubResponse, status_code=202)
-async def upload_document(file: UploadFile = File(...)) -> StubResponse:
+async def upload_document(file: UploadFile = File(...)) -> StubResponse:  # noqa: B008
     return StubResponse(endpoint="POST /documents")
 
 

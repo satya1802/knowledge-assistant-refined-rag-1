@@ -6,6 +6,7 @@ import * as UI from "@/lib/ui";
 import { Icons } from "@/lib/icons";
 import { brand } from "@/lib/brand";
 import { useNavigate } from "@/lib/navigate";
+import { useAuth } from "@/lib/auth";
 
 const { Button, Input, Label, Checkbox, Badge, Separator } = UI;
 const { Check, ChevronRight, ChevronDown, Users, Settings, FileText, Clock, ArrowLeft, ArrowRight, AlertCircle, CheckCircle } = Icons;
@@ -43,32 +44,9 @@ const alpha = (c, a) => {
 };
 
 // ---------------------------------------------------------------------------
-// Seeded data for the pilot build
+// Decorative knowledge-base status data for the right-hand rail. No account
+// or credential data lives here -- authentication is wired to the real API.
 // ---------------------------------------------------------------------------
-const ACCOUNTS = [
-  {
-    email: 'm.okafor@northbay.example',
-    password: 'Harbour-2026!',
-    role: 'Administrator',
-    is_active: true,
-    note: 'Uploads, users, retrieval settings',
-  },
-  {
-    email: 'j.whitfield@northbay.example',
-    password: 'Trellis-4417',
-    role: 'Standard user',
-    is_active: true,
-    note: 'Chat and downloads only',
-  },
-  {
-    email: 'd.rosseau@northbay.example',
-    password: 'Ferryman-9021',
-    role: 'Disabled account',
-    is_active: false,
-    note: 'Refused even with the right password',
-  },
-];
-
 const INDEX_TILES = [
   { label: 'Documents', value: '86', tone: 'plain' },
   { label: 'Ready', value: '83', tone: 'good' },
@@ -98,6 +76,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function Screen() {
   const navigate = useNavigate();
+  const { login, bootstrap } = useAuth();
   const bg = brand.backgroundColor;
   const surface = mix(bg, brand.neutralColor, 0.1);
   const surfaceDeep = darken(bg, 0.35);
@@ -124,13 +103,11 @@ export default function Screen() {
   const [helpOpen, setHelpOpen] = React.useState(false);
   const [snapshot, setSnapshot] = React.useState({ stale: true, label: '4m 12s ago', busy: false });
 
-  const authTimer = React.useRef(null);
   const landTimer = React.useRef(null);
   const snapTimer = React.useRef(null);
 
   React.useEffect(
     () => () => {
-      clearTimeout(authTimer.current);
       clearTimeout(landTimer.current);
       clearTimeout(snapTimer.current);
     },
@@ -165,15 +142,6 @@ export default function Screen() {
     }, 700);
   };
 
-  const fill = (account) => {
-    setEmail(account.email);
-    setPassword(account.password);
-    setConfirm('');
-    setFieldErrors({});
-    setFormError(false);
-    if (status === 'denied') setStatus('idle');
-  };
-
   const switchMode = (next) => {
     setMode(next);
     setStatus('idle');
@@ -182,7 +150,7 @@ export default function Screen() {
     setConfirm('');
   };
 
-  const submit = (event) => {
+  const submit = async (event) => {
     event.preventDefault();
     if (busy || landed) return;
 
@@ -202,34 +170,45 @@ export default function Screen() {
 
     setFormError(false);
     setStatus('checking');
-    clearTimeout(authTimer.current);
-    authTimer.current = setTimeout(() => {
-      if (mode === 'bootstrap') {
+
+    if (mode === 'bootstrap') {
+      const result = await bootstrap(normalized, password);
+      if (result.ok) {
+        setPassword('');
+        switchMode('signin');
+        setEmail(normalized);
+        return;
+      }
+      if (result.alreadyExists) {
         setStatus('denied');
         return;
       }
-      if (lockSeconds > 0 && lockedEmail === normalized) {
-        setStatus('idle');
-        setFormError(true);
-        return;
-      }
-      const account = ACCOUNTS.find((a) => a.email.toLowerCase() === normalized);
-      const ok = !!account && account.is_active && account.password === password;
-      if (ok) {
-        setAttempts(0);
-        setStatus('success');
-        landTimer.current = setTimeout(() => navigate('chat'), 1100);
-        return;
-      }
-      const count = attempts + 1;
-      setAttempts(count);
-      if (count >= MAX_ATTEMPTS) {
-        setLockSeconds(LOCK_SECONDS);
-        setLockedEmail(normalized);
-      }
       setStatus('idle');
       setFormError(true);
-    }, 850);
+      return;
+    }
+
+    if (lockSeconds > 0 && lockedEmail === normalized) {
+      setStatus('idle');
+      setFormError(true);
+      return;
+    }
+
+    const result = await login(normalized, password);
+    if (result.ok) {
+      setAttempts(0);
+      setStatus('success');
+      landTimer.current = setTimeout(() => navigate('chat'), 1100);
+      return;
+    }
+    const count = attempts + 1;
+    setAttempts(count);
+    if (count >= MAX_ATTEMPTS) {
+      setLockSeconds(LOCK_SECONDS);
+      setLockedEmail(normalized);
+    }
+    setStatus('idle');
+    setFormError(true);
   };
 
   const toneColor = (tone) =>
@@ -331,8 +310,8 @@ export default function Screen() {
                     </h2>
                     <p className="mt-1.5 text-[12.5px] leading-relaxed" style={{ color: text }}>
                       Only the first account created becomes an administrator, and that has already happened here.
-                      Ask <span style={{ color: textHi }}>m.okafor@northbay.example</span> to create your account on
-                      Users &amp; Settings — they will issue a temporary password and pass it to you directly.
+                      Ask your administrator to create your account on Users &amp; Settings — they will issue a
+                      temporary password and pass it to you directly.
                     </p>
                     <Button
                       type="button"
@@ -772,58 +751,6 @@ export default function Screen() {
                   </div>
                 ))}
               </dl>
-            </div>
-
-            <div
-              className="rounded-lg border p-4"
-              style={{ borderColor: lineSoft, backgroundColor: surfaceDeep, borderRadius: r }}
-            >
-              <div className="flex items-center gap-2">
-                <h3 className="text-[12px] font-semibold uppercase tracking-[0.16em]" style={{ color: text }}>
-                  Pilot environment
-                </h3>
-                <Badge
-                  className="px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
-                  style={{
-                    backgroundColor: alpha(brand.accentColor, 0.15),
-                    color: brand.accentColor,
-                    borderRadius: 4,
-                  }}
-                >
-                  Staging
-                </Badge>
-              </div>
-              <p className="mt-2 text-[12px] leading-relaxed" style={{ color: text }}>
-                Three seeded accounts run against the staging knowledge base.
-              </p>
-              <ul className="mt-3 space-y-2.5">
-                {ACCOUNTS.map((a) => (
-                  <li key={a.email} className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-[12px]" style={{ color: textHi }}>
-                        {a.email}
-                      </p>
-                      <p className="mt-0.5 text-[11px]" style={{ color: a.is_active ? textDim : brand.accentColor }}>
-                        {a.role} · {a.note}
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      onClick={() => fill(a)}
-                      className="ka-grow shrink-0 border px-2.5 py-1 text-[11px] font-medium"
-                      style={{
-                        backgroundColor: 'transparent',
-                        borderColor: line,
-                        color: textHi,
-                        borderRadius: r,
-                      }}
-                      aria-label={`Fill the form with ${a.email}`}
-                    >
-                      Fill
-                    </Button>
-                  </li>
-                ))}
-              </ul>
             </div>
 
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pt-1 text-[12px]">

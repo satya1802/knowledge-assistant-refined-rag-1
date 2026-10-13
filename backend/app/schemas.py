@@ -7,6 +7,7 @@ shapes (and the behaviour that fills them) are development-sprint work, one
 endpoint at a time.
 """
 
+import uuid
 from typing import Literal
 
 from pydantic import BaseModel
@@ -28,6 +29,22 @@ class StubResponse(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+
+
+class UserOut(BaseModel):
+    """What a user looks like in any response -- never a password or hash
+    (AC-001/AC-003)."""
+
+    id: uuid.UUID
+    email: str
+    role: str
+    is_active: bool
+
+    model_config = {"from_attributes": True}
+
+
+class LoginResponse(BaseModel):
+    user: UserOut
 
 
 class CreateUserRequest(BaseModel):

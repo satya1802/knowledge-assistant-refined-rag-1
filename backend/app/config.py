@@ -62,3 +62,29 @@ def ocr_min_text_chars(default: int = 20) -> int:
         return int(raw)
     except ValueError:
         return default
+
+
+def bcrypt_rounds(default: int = 12) -> int:
+    """Bcrypt cost factor for password hashing, read at point of use so an
+    operator can raise it (e.g. on faster hardware) without a code change.
+    """
+    raw = os.getenv("BCRYPT_COST")
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+def session_lifetime_days(default: int = 14) -> int:
+    """How long a freshly created session row stays valid."""
+    raw = os.getenv("SESSION_LIFETIME_DAYS")
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        return default
+    return value if value > 0 else default
