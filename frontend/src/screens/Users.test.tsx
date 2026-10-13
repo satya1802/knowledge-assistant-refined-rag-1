@@ -8,7 +8,9 @@ import { AuthProvider } from "@/lib/auth";
 const ADMIN_ME = { id: "u1", email: "admin@co.com", role: "admin", is_active: true };
 const MEMBER_ME = { id: "u2", email: "member@co.com", role: "user", is_active: true };
 
-function mockFetchSequence(handlers: Record<string, (init?: RequestInit) => Response | Promise<Response>>) {
+function mockFetchSequence(
+  handlers: Record<string, (init?: RequestInit) => Response | Promise<Response>>,
+) {
   return vi.fn().mockImplementation((url: string, init?: RequestInit) => {
     const method = init?.method ?? "GET";
     for (const key of Object.keys(handlers)) {
@@ -57,8 +59,20 @@ describe("Users screen", () => {
 
   it("renders a loading state then the user list on success", async () => {
     const rows = [
-      { id: "a1", email: "dana@co.com", role: "admin", is_active: true, created_at: "2026-01-01T00:00:00Z" },
-      { id: "a2", email: "sam@co.com", role: "user", is_active: false, created_at: "2026-01-02T00:00:00Z" },
+      {
+        id: "a1",
+        email: "dana@co.com",
+        role: "admin",
+        is_active: true,
+        created_at: "2026-01-01T00:00:00Z",
+      },
+      {
+        id: "a2",
+        email: "sam@co.com",
+        role: "user",
+        is_active: false,
+        created_at: "2026-01-02T00:00:00Z",
+      },
     ];
     vi.stubGlobal(
       "fetch",
@@ -151,7 +165,13 @@ describe("Users screen", () => {
   it("calls PATCH /users/{id} to disable a user and reflects the response", async () => {
     const user = userEvent.setup();
     const rows = [
-      { id: "a1", email: "dana@co.com", role: "user", is_active: true, created_at: "2026-01-01T00:00:00Z" },
+      {
+        id: "a1",
+        email: "dana@co.com",
+        role: "user",
+        is_active: true,
+        created_at: "2026-01-01T00:00:00Z",
+      },
     ];
     vi.stubGlobal(
       "fetch",
@@ -177,7 +197,13 @@ describe("Users screen", () => {
   it("calls PATCH /users/{id} to grant admin", async () => {
     const user = userEvent.setup();
     const rows = [
-      { id: "a1", email: "dana@co.com", role: "user", is_active: true, created_at: "2026-01-01T00:00:00Z" },
+      {
+        id: "a1",
+        email: "dana@co.com",
+        role: "user",
+        is_active: true,
+        created_at: "2026-01-01T00:00:00Z",
+      },
     ];
     vi.stubGlobal(
       "fetch",

@@ -23,7 +23,13 @@ from sqlalchemy.orm import Session as DBSession
 from app.database import get_db
 from app.deps import current_user, require_admin
 from app.models import User
-from app.schemas import CreateUserRequest, CreateUserResponse, PatchUserRequest, UserListOut, UserOut
+from app.schemas import (
+    CreateUserRequest,
+    CreateUserResponse,
+    PatchUserRequest,
+    UserListOut,
+    UserOut,
+)
 from app.security import hash_password
 
 router = APIRouter(prefix="/users", tags=["users"])

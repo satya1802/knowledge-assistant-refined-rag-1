@@ -5,8 +5,23 @@ import { useAuth } from "@/lib/auth";
 import * as UI from "@/lib/ui";
 import { Icons } from "@/lib/icons";
 
-const { Button, Input, Label, Badge, Table, THead, TBody, TR, TH, TD, Card, CardHeader, CardTitle, CardDescription, CardContent } =
-  UI;
+const {
+  Button,
+  Input,
+  Label,
+  Badge,
+  Table,
+  THead,
+  TBody,
+  TR,
+  TH,
+  TD,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} = UI;
 const { Plus, Check, X, AlertCircle, CheckCircle, Users: UsersIcon } = Icons;
 
 type UserRow = {
@@ -203,7 +218,9 @@ export default function Users() {
                 <CheckCircle size={14} /> {`Temporary password for ${justCreated.email}`}
               </p>
               <p className="mt-1 text-[var(--brand-fg-muted)]">
-                {"This password is shown once and is not sent by email. Copy it now -- it will not be shown again."}
+                {
+                  "This password is shown once and is not sent by email. Copy it now -- it will not be shown again."
+                }
               </p>
               <div className="mt-2 flex items-center gap-2">
                 <code
