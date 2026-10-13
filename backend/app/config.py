@@ -1,15 +1,17 @@
 """Central place to read the service keys the product owner has not set yet.
 
 AWS_ACCESS_KEY_ID, AWS_REGION, AWS_SECRET_ACCESS_KEY, S3_BUCKET (object
-storage), OCR_MIN_TEXT_CHARS, TESSDATA_PREFIX, TESSERACT_CMD (OCR) and
-GROQ_API_KEY (the AI provider) are added to the environment before
-deployment, not during development. Every feature that needs one of them
-must read it here, at the point of use, and turn itself off with a clear
-message when it is empty -- never fail at import or at startup, and a test
-must mock the feature, never exercise the real service through this module.
+storage), OCR_MIN_TEXT_CHARS, TESSDATA_PREFIX, TESSERACT_CMD (OCR),
+GROQ_API_KEY (the AI provider) and the embedding provider's own key
+(`embedding_status()`, name chosen by `EMBEDDING_PROVIDER`) are added to the
+environment before deployment, not during development. Every feature that
+needs one of them must read it here, at the point of use, and turn itself
+off with a clear message when it is empty -- never fail at import or at
+startup, and a test must mock the feature, never exercise the real service
+through this module.
 
 This module only reports whether a feature's keys are present; it never
-calls AWS, Groq or Tesseract itself.
+calls AWS, Groq, Tesseract or an embedding provider itself.
 """
 
 import os
@@ -48,6 +50,28 @@ def groq_status() -> FeatureStatus:
 def ocr_status() -> FeatureStatus:
     """Tesseract OCR: reads scanned/image-only PDF pages in-container."""
     return _require(["TESSERACT_CMD", "TESSDATA_PREFIX"], "Tesseract OCR")
+
+
+def embedding_status() -> FeatureStatus:
+    """The embedding provider named by `EMBEDDING_PROVIDER`
+    (`app/settings.py`), read here at the point of use (AC-155): reports
+    disabled with a clear, key-free message when no provider is chosen yet,
+    or when the chosen one's own key (`<PROVIDER>_EMBEDDING_API_KEY`) is
+    absent. `app/embedding.py` is this function's one caller."""
+    from app.settings import settings
+
+    provider = (settings.embedding_provider or "none").strip().lower()
+    if provider in ("", "none"):
+        return FeatureStatus(
+            enabled=False,
+            message=(
+                "No embedding provider is configured: set EMBEDDING_PROVIDER "
+                "(see backend/docs/decisions/0001-embedding-provider.md)."
+            ),
+        )
+    return _require(
+        [f"{provider.upper()}_EMBEDDING_API_KEY"], f"Embedding provider '{provider}'"
+    )
 
 
 def ocr_min_text_chars(default: int = 20) -> int:
