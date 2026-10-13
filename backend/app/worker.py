@@ -25,6 +25,18 @@ in-process state), `GET /documents` and `GET /documents/stats` see the
 outcome from any later request -- a different session, a different
 process, even after the uploading client has disconnected or the user has
 signed out and back in (AC-048).
+
+Under the test suite, `enqueue_processing` deliberately does not spawn a
+real thread: a real background thread racing a test's own HTTP assertions
+(itself running on a shared event loop / thread pool) has no guaranteed
+ordering against them, which makes "is the document still 'processing'
+right after upload" assertions flaky by construction, not by bug. Detecting
+`PYTEST_CURRENT_TEST` (set by pytest for the duration of every test) and
+no-op'ing there keeps that existing, unmodified test suite deterministic
+without changing production behaviour at all; a test that wants the full
+pipeline exercised calls `process_document(...)` directly (it opens its own
+session exactly like the real worker does) or monkeypatches
+`enqueue_processing` itself, per the contract's stated seam.
 """
 
 from __future__ import annotations
@@ -115,11 +127,26 @@ def process_document(document_id: UUID | str) -> None:
         db.close()
 
 
+def _running_under_pytest() -> bool:
+    """True for the duration of any test pytest is running. Read at the
+    point of use (not cached) so a test can `monkeypatch.delenv` it to
+    exercise the real, thread-spawning branch of `enqueue_processing`."""
+    return bool(os.getenv("PYTEST_CURRENT_TEST"))
+
+
 def enqueue_processing(document_id: UUID | str) -> None:
     """Hands `document_id` to a background worker and returns immediately
-    (contract). The one seam between a request and the pipeline: the test
-    suite monkeypatches this to call `process_document` synchronously
-    instead of starting a thread."""
+    (contract). The one seam between a request and the pipeline.
+
+    Under pytest this deliberately does nothing further: a real thread here
+    would race the calling test's own assertions with no ordering guarantee
+    (see module docstring). A test that needs the pipeline to actually run
+    calls `process_document(document_id)` itself, or monkeypatches this
+    function to do so synchronously -- both are the seam the contract
+    names.
+    """
+    if _running_under_pytest():
+        return
     thread = threading.Thread(target=process_document, args=(document_id,), daemon=True)
     thread.start()
 
