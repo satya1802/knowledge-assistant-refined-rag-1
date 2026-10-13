@@ -3,6 +3,12 @@ FROM python:3.12-slim
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 
+# BEGIN QUORQ SYSTEM PACKAGES
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends poppler-utils tesseract-ocr \
+    && rm -rf /var/lib/apt/lists/*
+# END QUORQ SYSTEM PACKAGES
+
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 

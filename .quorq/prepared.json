@@ -1,0 +1,133 @@
+{
+  "architecture_npm": [
+    "react-dropzone",
+    "react-markdown"
+  ],
+  "key": {
+    "app_design_id": "24c1c1dd-8b37-4745-bc77-cdcc29565528",
+    "app_design_version": 1,
+    "architecture_document_id": "1a66768e-1b95-4592-9aa1-994ff6c9a8ce",
+    "architecture_version": 3
+  },
+  "outcome": "prepared",
+  "packages": [
+    {
+      "ecosystem": "pypi",
+      "error": "Install could not run: Could not start docker: [Errno 2] No such file or directory",
+      "name": "pypdf",
+      "status": "unverified",
+      "version": ">=4.0"
+    },
+    {
+      "ecosystem": "pypi",
+      "error": "Install could not run: Could not start docker: [Errno 2] No such file or directory",
+      "name": "python-docx",
+      "status": "unverified",
+      "version": ">=1.1"
+    },
+    {
+      "ecosystem": "pypi",
+      "error": "Install could not run: Could not start docker: [Errno 2] No such file or directory",
+      "name": "pdf2image",
+      "status": "unverified",
+      "version": ">=1.17"
+    },
+    {
+      "ecosystem": "system",
+      "name": "poppler-utils",
+      "status": "image",
+      "version": ""
+    },
+    {
+      "ecosystem": "pypi",
+      "error": "Install could not run: Could not start docker: [Errno 2] No such file or directory",
+      "name": "pytesseract",
+      "status": "unverified",
+      "version": ">=0.3.10"
+    },
+    {
+      "ecosystem": "system",
+      "name": "tesseract-ocr",
+      "status": "image",
+      "version": ""
+    },
+    {
+      "ecosystem": "pypi",
+      "error": "Install could not run: Could not start docker: [Errno 2] No such file or directory",
+      "name": "Pillow",
+      "status": "unverified",
+      "version": ">=10.0"
+    },
+    {
+      "ecosystem": "pypi",
+      "error": "Install could not run: Could not start docker: [Errno 2] No such file or directory",
+      "name": "pgvector",
+      "status": "unverified",
+      "version": ">=0.3"
+    },
+    {
+      "ecosystem": "pypi",
+      "error": "Install could not run: Could not start docker: [Errno 2] No such file or directory",
+      "name": "boto3",
+      "status": "unverified",
+      "version": ">=1.34"
+    },
+    {
+      "ecosystem": "pypi",
+      "error": "Install could not run: Could not start docker: [Errno 2] No such file or directory",
+      "name": "groq",
+      "status": "unverified",
+      "version": ">=0.11"
+    },
+    {
+      "ecosystem": "pypi",
+      "error": "Install could not run: Could not start docker: [Errno 2] No such file or directory",
+      "name": "rq",
+      "status": "unverified",
+      "version": ">=1.16"
+    },
+    {
+      "ecosystem": "pypi",
+      "error": "Install could not run: Could not start docker: [Errno 2] No such file or directory",
+      "name": "redis",
+      "status": "unverified",
+      "version": ">=5.0"
+    },
+    {
+      "ecosystem": "pypi",
+      "error": "Install could not run: Could not start docker: [Errno 2] No such file or directory",
+      "name": "bcrypt",
+      "status": "unverified",
+      "version": ">=4.1"
+    },
+    {
+      "ecosystem": "pypi",
+      "error": "Install could not run: Could not start docker: [Errno 2] No such file or directory",
+      "name": "python-multipart",
+      "status": "unverified",
+      "version": ">=0.0.9"
+    },
+    {
+      "ecosystem": "pypi",
+      "error": "Install could not run: Could not start docker: [Errno 2] No such file or directory",
+      "name": "sse-starlette",
+      "status": "unverified",
+      "version": ">=2.1"
+    },
+    {
+      "ecosystem": "npm",
+      "error": "Install could not run: Could not start docker: [Errno 2] No such file or directory",
+      "name": "react-markdown",
+      "status": "unverified",
+      "version": ">=9.0"
+    },
+    {
+      "ecosystem": "npm",
+      "error": "Install could not run: Could not start docker: [Errno 2] No such file or directory",
+      "name": "react-dropzone",
+      "status": "unverified",
+      "version": ">=14.2"
+    }
+  ],
+  "prepared_by_run": "26e2c1b5-a2a1-4437-9aeb-56b513be0989"
+}

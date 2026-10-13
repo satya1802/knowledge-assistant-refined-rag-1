@@ -20,7 +20,10 @@ def test_health_reports_ok() -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    assert set(body["services"]) == {"redis-queue"}
+    # Every architecture component whose keys the product owner has not set
+    # yet (see app/config.py) is reported here, unconfigured, rather than
+    # the service failing to start without them.
+    assert set(body["services"]) == {"redis-queue", "object-storage", "ai-provider", "ocr"}
 
 
 def test_the_openapi_document_builds() -> None:

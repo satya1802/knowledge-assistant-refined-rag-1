@@ -1,8 +1,13 @@
 """Pydantic request and response models.
 
-One pair per entity in the approved data model, plus the placeholder every
-generated route returns until it has been implemented.
+Request bodies are typed from the approved API spec so the OpenAPI document
+and any generated client are accurate before a single handler does real
+work. Responses stay the generic `StubResponse` below -- the actual response
+shapes (and the behaviour that fills them) are development-sprint work, one
+endpoint at a time.
 """
+
+from typing import Literal
 
 from pydantic import BaseModel
 
@@ -18,3 +23,46 @@ class StubResponse(BaseModel):
     endpoint: str
     status: str = "not_implemented"
     detail: str = "Scaffolded from the approved API spec; no behaviour yet."
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class CreateUserRequest(BaseModel):
+    email: str
+    temp_password: str
+    role: str
+
+
+class PatchUserRequest(BaseModel):
+    is_active: bool | None = None
+    role: str | None = None
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class ThemeRequest(BaseModel):
+    theme: Literal["light", "dark", "system"]
+
+
+class ReprocessRequest(BaseModel):
+    mode: Literal["retry", "reindex"]
+
+
+class ConversationCreateRequest(BaseModel):
+    title: str | None = None
+
+
+class ChatRequest(BaseModel):
+    conversation_id: str
+    question: str
+
+
+class SettingsPatchRequest(BaseModel):
+    threshold: float | None = None
+    answer_model: str | None = None

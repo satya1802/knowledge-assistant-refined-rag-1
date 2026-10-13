@@ -1,9 +1,10 @@
 """Application entrypoint.
 
-Generated from the approved architecture: one router per component that owns
-endpoints, one route per endpoint the API spec declares. Every generated route
-is a stub that returns a typed placeholder, so the service starts, serves its
-OpenAPI document and passes its tests before a single handler is implemented.
+Generated from the approved architecture: one router per resource domain in
+the `api` component, one route per endpoint the API spec declares. Every
+generated route except `/health` is a stub that returns a typed placeholder,
+so the service starts, serves its OpenAPI document and passes its tests
+before a single handler is implemented.
 """
 
 import os
@@ -13,11 +14,26 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import models  # noqa: F401 -- imported so the tables register before create_all
 from app.database import Base, engine
+from app.routers import account, auth, chat, conversations, documents, settings, users
 from app.services import configured_services
 
 app = FastAPI(
     title="Knowledge Assistant - Refined RAG",
-    description="Knowledge Assistant - Refined RAG MVP Page 1 Knowledge Assistant Refined Enterprise RAG Chatbot - MVP Build Specification AI Provider Google Gemini only Primary Data Source Uploaded Knowledge Base Fallback Gemini general knowledge only when Knowledge Base has no relevant match Persistence Documents, users, chat history, messages and settings persist across reloads/restarts Reference Stack FastAPI + React/TypeScript + SQLite locally / PostgreSQL + pgvector production Core rule: Knowledge Base first. Gemini general-knowledge fallback second. Reloading the application must never erase chat history, uploaded documents, users, or saved application data.",
+    # Wrapped across lines rather than one very long literal so this stays
+    # inside the 100-column limit backend/ruff.toml enforces; the words
+    # themselves are the approved project brief, unchanged.
+    description=(
+        "Knowledge Assistant - Refined RAG MVP Page 1 Knowledge Assistant Refined "
+        "Enterprise RAG Chatbot - MVP Build Specification AI Provider Google Gemini "
+        "only Primary Data Source Uploaded Knowledge Base Fallback Gemini general "
+        "knowledge only when Knowledge Base has no relevant match Persistence "
+        "Documents, users, chat history, messages and settings persist across "
+        "reloads/restarts Reference Stack FastAPI + React/TypeScript + SQLite "
+        "locally / PostgreSQL + pgvector production Core rule: Knowledge Base "
+        "first. Gemini general-knowledge fallback second. Reloading the application "
+        "must never erase chat history, uploaded documents, users, or saved "
+        "application data."
+    ),
     version="0.1.0",
 )
 
@@ -38,6 +54,14 @@ app.add_middleware(
 # The scaffold ships no migrations, so the tables are created from the models on
 # startup. Replace this with Alembic before anything holds data worth keeping.
 Base.metadata.create_all(bind=engine)
+
+app.include_router(auth.router)
+app.include_router(users.router)
+app.include_router(account.router)
+app.include_router(documents.router)
+app.include_router(conversations.router)
+app.include_router(chat.router)
+app.include_router(settings.router)
 
 
 @app.get("/health")
