@@ -1,16 +1,20 @@
 """Document upload, listing, lifecycle and download.
 
-POST /documents, GET /documents and GET /documents/stats are real and
-database-backed (US-008-1): an admin uploads a supported file, its original
-bytes go to object storage (or local disk when S3 is not configured -- see
-`app/storage.py`), and a `Document` row is created with status
-'processing'. That row is then handed to the background worker
-(`app/worker.py`, US-019-2/US-020) via `enqueue_processing` -- the request
-returns as soon as the row is committed, never waiting on extraction,
-chunking or embedding, and the worker later moves the row to 'ready' or
-'failed' on its own, independent of this request's session or the
-uploading client staying connected. `/documents/{id}/download`,
-`/documents/{id}/reprocess` and `DELETE /documents/{id}` stay stubs here
+POST /documents, GET /documents, GET /documents/stats and DELETE
+/documents/{id} are real and database-backed (US-008-1/US-010-1): an admin
+uploads a supported file, its original bytes go to object storage (or local
+disk when S3 is not configured -- see `app/storage.py`), and a `Document`
+row is created with status 'processing'. That row is then handed to the
+background worker (`app/worker.py`, US-019-2/US-020) via
+`enqueue_processing` -- the request returns as soon as the row is
+committed, never waiting on extraction, chunking or embedding, and the
+worker later moves the row to 'ready' or 'failed' on its own, independent
+of this request's session or the uploading client staying connected. A
+document the worker marks 'failed' keeps both its row and its stored
+object -- nothing here or in the worker ever deletes either on failure
+(AC-020); only an explicit `DELETE /documents/{id}` removes them.
+
+`/documents/{id}/download` and `/documents/{id}/reprocess` stay stubs here
 for later development-sprint work.
 
 `/stats` is declared ahead of the `{document_id}` routes so a literal path
@@ -34,7 +38,7 @@ from app.schemas import (
     ReprocessRequest,
     StubResponse,
 )
-from app.storage import store_object
+from app.storage import delete_object, store_object
 from app.worker import enqueue_processing
 
 router = APIRouter(prefix="/documents", tags=["documents"])
@@ -51,6 +55,8 @@ _ACCEPTED_CONTENT_TYPES = {
 }
 _ACCEPTED_LABEL = "PDF, DOCX, TXT, MD"
 _MAX_SIZE_BYTES = 25 * 1024 * 1024  # AC-017
+
+_DOCUMENT_NOT_FOUND = HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
 
 
 def _resolve_file_type(filename: str, content_type: str | None) -> str | None:
@@ -180,6 +186,34 @@ async def reprocess_document(document_id: str, payload: ReprocessRequest) -> Stu
     return StubResponse(endpoint="POST /documents/{id}/reprocess")
 
 
-@router.delete("/{document_id}", status_code=204)
-async def delete_document(document_id: str) -> Response:
-    return Response(status_code=204)
+@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_document(
+    document_id: str,
+    db: DBSession = Depends(get_db),  # noqa: B008
+    _user: User = Depends(require_admin),  # noqa: B008
+) -> Response:
+    """Removes a document and everything that depends on it (US-010-1):
+    its `Chunk` rows, the `Document` row itself, and the original object
+    `app/storage.py` wrote for it. Admin-only (401 unauthenticated, 403
+    signed-in non-admin via `require_admin`); an id that does not name an
+    existing document is 404."""
+    try:
+        doc_uuid = uuid.UUID(document_id)
+    except ValueError as exc:
+        raise _DOCUMENT_NOT_FOUND from exc
+
+    document = db.query(Document).filter(Document.id == doc_uuid).first()
+    if document is None:
+        raise _DOCUMENT_NOT_FOUND
+
+    s3_key = document.s3_key
+
+    db.query(Chunk).filter(Chunk.document_id == document.id).delete()
+    db.delete(document)
+    db.commit()
+
+    # Deletion of the stored object goes through app/storage.py only -- no
+    # inline boto3/file calls here.
+    delete_object(s3_key)
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

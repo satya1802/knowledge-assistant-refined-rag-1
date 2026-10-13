@@ -45,3 +45,30 @@ def store_object(key: str, data: bytes) -> str:
     )
     client.put_object(Bucket=os.environ["S3_BUCKET"], Key=key, Body=data)
     return key
+
+
+def delete_object(key: str) -> None:
+    """Deletes the object stored under `key`: from S3 when object storage is
+    configured, else from local disk under `STORAGE_DIR`. A caller that has
+    already lost the object (e.g. it was never written, or was removed out
+    of band) is not an error -- this is the one place a document's delete
+    endpoint removes the original file, so it must not raise when there is
+    nothing left to remove."""
+    status = s3_status()
+    if not status.enabled:
+        path = _local_storage_dir() / key
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            logger.info("Nothing to delete at %s; already absent.", path)
+        return
+
+    import boto3  # imported here, not at module load, per app/config.py's rule
+
+    client = boto3.client(
+        "s3",
+        region_name=os.environ["AWS_REGION"],
+        aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
+        aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
+    )
+    client.delete_object(Bucket=os.environ["S3_BUCKET"], Key=key)

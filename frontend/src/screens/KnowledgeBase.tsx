@@ -108,6 +108,8 @@ export default function KnowledgeBase() {
   const [deleting, setDeleting] = React.useState(false);
   const [rowError, setRowError] = React.useState("");
 
+  const hasActiveFilters = Boolean(query.trim() || statusFilter || typeFilter);
+
   const buildQuery = React.useCallback(() => {
     const params = new URLSearchParams();
     if (query.trim()) params.set("q", query.trim());
@@ -141,15 +143,17 @@ export default function KnowledgeBase() {
     await Promise.all([loadDocuments(), loadStats()]);
   }, [loadDocuments, loadStats]);
 
-  // AC-036/AC-034: the table and tiles come from the backend on mount and on
+  // AC-021/AC-023: the table and tiles come from the backend on mount and on
   // every reload -- nothing here is seeded or read back from localStorage.
   React.useEffect(() => {
     void loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query, statusFilter, typeFilter]);
 
-  // AC-015: a document sitting in Processing is polled until it leaves that
-  // state, so an upload's progress shows up without a manual refresh.
+  // AC-019/AC-024: a document sitting in Processing is polled -- never faster
+  // than the 4s interval -- until it leaves that state, so completion (or a
+  // deletion made elsewhere) shows up without a manual refresh. Polling stops
+  // the moment nothing is Processing.
   React.useEffect(() => {
     const hasProcessing = documents.some((doc) => doc.status === "processing");
     if (!hasProcessing) return undefined;
@@ -220,6 +224,8 @@ export default function KnowledgeBase() {
     try {
       await apiFetch(`/documents/${deleteTarget.id}`, { method: "DELETE" });
       setDeleteTarget(null);
+      // AC-024: the table and tiles reflect a deletion immediately -- no
+      // manual page refresh required.
       await loadAll();
     } catch {
       setRowError("Couldn't delete that document. Try again.");
@@ -234,6 +240,12 @@ export default function KnowledgeBase() {
     });
   };
 
+  const clearFilters = () => {
+    setQuery("");
+    setStatusFilter("");
+    setTypeFilter("");
+  };
+
   if (authStatus === "loading") {
     return (
       <div className="p-6">
@@ -241,6 +253,19 @@ export default function KnowledgeBase() {
       </div>
     );
   }
+
+  // AC-153 vs AC-154: an empty table can mean two different things, and they
+  // must read differently. If the backend's unfiltered total is zero, there
+  // is truly nothing in the knowledge base yet -- the message below is
+  // intentionally identical for an administrator and a standard user (both
+  // need to know an admin has to upload something). If the total is
+  // non-zero, the current filters are simply too narrow, and that empty
+  // state carries its own copy plus a control to clear them. When the stats
+  // call itself has failed, fall back to whether a filter is active so the
+  // screen never has to guess at a count it does not have.
+  const noDocumentsAtAll =
+    documents.length === 0 && (stats ? stats.total === 0 : !hasActiveFilters);
+  const noDocumentsMatchFilters = documents.length === 0 && !noDocumentsAtAll;
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -368,17 +393,8 @@ export default function KnowledgeBase() {
                 ]}
               />
             </div>
-            {query || statusFilter || typeFilter ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setQuery("");
-                  setStatusFilter("");
-                  setTypeFilter("");
-                }}
-              >
+            {hasActiveFilters ? (
+              <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>
                 <X size={14} /> {"Clear"}
               </Button>
             ) : null}
@@ -408,13 +424,19 @@ export default function KnowledgeBase() {
                 {"Retry"}
               </Button>
             </div>
-          ) : documents.length === 0 ? (
+          ) : noDocumentsAtAll ? (
             <Empty
               title="No documents yet"
-              description={
-                isAdmin
-                  ? "Upload a file above to make it available to the assistant."
-                  : "There is nothing in the knowledge base yet."
+              description="There is nothing in the knowledge base yet. An administrator needs to upload documents before they will appear here."
+            />
+          ) : noDocumentsMatchFilters ? (
+            <Empty
+              title="No documents match your filters"
+              description="Try a different search term, or clear the filters to see everything in the knowledge base."
+              action={
+                <Button type="button" variant="secondary" size="sm" onClick={clearFilters}>
+                  <X size={14} /> {"Clear filters"}
+                </Button>
               }
             />
           ) : (
