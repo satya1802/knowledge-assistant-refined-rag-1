@@ -26,15 +26,11 @@ describe("Docs screen", () => {
   it("AC-090: Getting Started explains sign-in, asking questions, citations, the badge and document uploads", () => {
     render(<Docs />);
 
-    expect(
-      screen.getByText(/An administrator provisions your account/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/An administrator provisions your account/i)).toBeInTheDocument();
     expect(
       screen.getByText(/Every question searches the company's indexed documents/i),
     ).toBeInTheDocument();
-    expect(
-      screen.getByText(/the source panel: the filename it came from/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/the source panel: the filename it came from/i)).toBeInTheDocument();
     expect(
       screen.getByText(/"Not from your documents" badge instead of any citations/i),
     ).toBeInTheDocument();
@@ -68,9 +64,7 @@ describe("Docs screen", () => {
   it("states plainly that this is documentation only, with no external keys, versioning or rate limits", () => {
     render(<Docs />);
 
-    expect(
-      screen.getByText(/This page documents this application only\./i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/This page documents this application only\./i)).toBeInTheDocument();
     expect(
       screen.getByText(
         /No external API keys are issued, and there is no external consumption, versioning or rate-limit scheme/i,

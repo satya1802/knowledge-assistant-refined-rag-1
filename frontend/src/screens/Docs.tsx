@@ -69,7 +69,8 @@ const ENDPOINTS: Endpoint[] = [
       "200 — sets the session cookie; body { user: { id, email, role, is_active, theme } }",
       '401 — "Email or password is incorrect" (also returned for an unknown email, a disabled account, or a locked-out email)',
     ],
-    notes: "The 401 body is identical in every failure case, so nothing reveals which one occurred.",
+    notes:
+      "The 401 body is identical in every failure case, so nothing reveals which one occurred.",
   },
   {
     id: "auth-logout",
@@ -137,7 +138,7 @@ const ENDPOINTS: Endpoint[] = [
     auth: "Signed in",
     summary: "Replace your own password after confirming the current one.",
     request: ["current_password — string", "new_password — string"],
-    response: ["200 — { status: \"ok\" }", "400 — current password is incorrect"],
+    response: ['200 — { status: "ok" }', "400 — current password is incorrect"],
   },
   {
     id: "account-theme",
@@ -162,7 +163,8 @@ const ENDPOINTS: Endpoint[] = [
       "400 — unsupported file type",
       "413 — file exceeds the 25 MB limit",
     ],
-    notes: "Returns as soon as the original file is stored; processing continues in a background worker.",
+    notes:
+      "Returns as soon as the original file is stored; processing continues in a background worker.",
   },
   {
     id: "docs-list",
@@ -238,7 +240,8 @@ const ENDPOINTS: Endpoint[] = [
       "q — optional search term; when present, only conversations whose title or message content contains it (case-insensitive) are returned",
     ],
     response: ["200 — [{ id, title, created_at, updated_at }]"],
-    notes: "A blank or absent q returns the full list; a q that matches nothing returns an empty list, never a 404.",
+    notes:
+      "A blank or absent q returns the full list; a q that matches nothing returns an empty list, never a 404.",
   },
   {
     id: "conversations-create",
@@ -262,7 +265,8 @@ const ENDPOINTS: Endpoint[] = [
       "200 — { id, title, created_at, updated_at, messages: [{ id, role, content, from_documents, citations: [...], created_at }] }",
       "404 — unknown id, or an id that belongs to another account",
     ],
-    notes: "A conversation belonging to someone else looks identical to one that does not exist at all.",
+    notes:
+      "A conversation belonging to someone else looks identical to one that does not exist at all.",
   },
   {
     id: "conversations-delete",
@@ -306,7 +310,10 @@ const ENDPOINTS: Endpoint[] = [
     path: "/settings",
     auth: "Admin only",
     summary: "Change the retrieval threshold or the answer model.",
-    request: ["similarity_threshold — number between 0 and 1 (optional)", "answer_model — string (optional)"],
+    request: [
+      "similarity_threshold — number between 0 and 1 (optional)",
+      "answer_model — string (optional)",
+    ],
     response: ["200 — { similarity_threshold, answer_model }", "422 — threshold outside 0–1"],
   },
 ];
@@ -358,7 +365,7 @@ function GettingStarted() {
         </h2>
         <p className={bodyCls}>
           {
-            "Type a question in plain language on the Chat page and send it. Every question searches the company's indexed documents before an answer is written, including follow-up questions in the same conversation — you can ask \"and for contractors?\" without repeating the original question."
+            'Type a question in plain language on the Chat page and send it. Every question searches the company\'s indexed documents before an answer is written, including follow-up questions in the same conversation — you can ask "and for contractors?" without repeating the original question.'
           }
         </p>
       </section>
@@ -380,7 +387,7 @@ function GettingStarted() {
         </h2>
         <p className={bodyCls}>
           {
-            "When nothing in the knowledge base is a close enough match, the assistant still answers — from its general knowledge rather than your documents — and marks that answer with a \"Not from your documents\" badge instead of any citations. Treat those answers as background, not as your organisation's policy."
+            'When nothing in the knowledge base is a close enough match, the assistant still answers — from its general knowledge rather than your documents — and marks that answer with a "Not from your documents" badge instead of any citations. Treat those answers as background, not as your organisation\'s policy.'
           }
         </p>
       </section>
@@ -430,7 +437,9 @@ function ApiReference() {
                   <TD>{endpoint.auth}</TD>
                   <TD>
                     <p>{endpoint.summary}</p>
-                    {endpoint.notes ? <p className="mt-1 text-xs text-slate-500">{endpoint.notes}</p> : null}
+                    {endpoint.notes ? (
+                      <p className="mt-1 text-xs text-slate-500">{endpoint.notes}</p>
+                    ) : null}
                   </TD>
                   <TD>
                     <ul className="list-disc pl-4">
