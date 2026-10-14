@@ -67,7 +67,11 @@ test.describe("Conversation delete requires confirmation (US-030-3)", () => {
     });
     expect(loginOwner.status()).toBe(200);
 
-    for (const title of ["Conversation to delete", "Conversation to keep one", "Conversation to keep two"]) {
+    for (const title of [
+      "Conversation to delete",
+      "Conversation to keep one",
+      "Conversation to keep two",
+    ]) {
       const created = await ownerContext.post("/conversations", { data: { title } });
       expect(created.status()).toBe(201);
     }
@@ -85,7 +89,9 @@ test.describe("Conversation delete requires confirmation (US-030-3)", () => {
     // Open the delete affordance -- confirmation required, row untouched
     // until Confirm is clicked.
     await page.getByRole("button", { name: "Delete Conversation to delete" }).click();
-    await expect(page.getByText('Delete "Conversation to delete"? This cannot be undone.')).toBeVisible();
+    await expect(
+      page.getByText('Delete "Conversation to delete"? This cannot be undone.'),
+    ).toBeVisible();
 
     // Cancel: the row is still present, nothing was deleted.
     await page.getByRole("button", { name: "Cancel" }).click();
