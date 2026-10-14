@@ -311,11 +311,7 @@ def test_chat_history_rows_survive_a_startup_cycle_with_no_delete_or_truncate() 
     db = SessionLocal()
     try:
         assert db.query(Conversation).filter(Conversation.id == conversation_id).count() == 1
-        assert (
-            db.query(Message).filter(Message.conversation_id == conversation_id).count() == 2
-        )
-        assert (
-            db.query(Citation).filter(Citation.message_id == assistant_message_id).count() == 1
-        )
+        assert db.query(Message).filter(Message.conversation_id == conversation_id).count() == 2
+        assert db.query(Citation).filter(Citation.message_id == assistant_message_id).count() == 1
     finally:
         db.close()
