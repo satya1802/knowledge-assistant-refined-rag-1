@@ -68,9 +68,7 @@ export default function SourcePanel({ citation, onClose }: Props) {
     setDownloadError("");
     setDownloading(true);
     try {
-      const { blob, filename } = await apiFetchBlob(
-        `/documents/${citation.document_id}/download`,
-      );
+      const { blob, filename } = await apiFetchBlob(`/documents/${citation.document_id}/download`);
       saveBlob(blob, filename || citation.filename || "document");
     } catch {
       setDownloadError("Couldn't download that document. Try again.");

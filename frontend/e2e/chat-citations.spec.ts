@@ -146,8 +146,12 @@ test.describe("Chat citation chips, badge and source panel (US-023-2)", () => {
     await expect(page.getByText(/from your documents/i)).toBeVisible();
     const chips = page.getByRole("group", { name: /sources/i }).getByRole("button");
     await expect(chips).toHaveCount(2);
-    await expect(page.getByRole("button", { name: new RegExp(`Source 1: ${c1.filename}`) })).toBeVisible();
-    await expect(page.getByRole("button", { name: new RegExp(`Source 2: ${c2.filename}`) })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: new RegExp(`Source 1: ${c1.filename}`) }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: new RegExp(`Source 2: ${c2.filename}`) }),
+    ).toBeVisible();
   });
 
   test("a fallback answer shows the Not-from-your-documents badge and zero chips", async ({
@@ -311,8 +315,12 @@ test.describe("Chat citation chips, badge and source panel (US-023-2)", () => {
     await expect(page.getByText(/not from your documents/i)).toBeVisible();
     const chips = page.getByRole("group", { name: /sources/i }).getByRole("button");
     await expect(chips).toHaveCount(2);
-    await expect(page.getByRole("button", { name: new RegExp(`Source 1: ${c1.filename}`) })).toBeVisible();
-    await expect(page.getByRole("button", { name: new RegExp(`Source 2: ${c2.filename}`) })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: new RegExp(`Source 1: ${c1.filename}`) }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: new RegExp(`Source 2: ${c2.filename}`) }),
+    ).toBeVisible();
 
     // A hard reload re-fetches the same conversation detail and renders the
     // same chip numbers and badge states from the persisted payload.
@@ -322,7 +330,11 @@ test.describe("Chat citation chips, badge and source panel (US-023-2)", () => {
     await expect(page.getByText(/from your documents/i)).toBeVisible();
     await expect(page.getByText(/not from your documents/i)).toBeVisible();
     await expect(page.getByRole("group", { name: /sources/i }).getByRole("button")).toHaveCount(2);
-    await expect(page.getByRole("button", { name: new RegExp(`Source 1: ${c1.filename}`) })).toBeVisible();
-    await expect(page.getByRole("button", { name: new RegExp(`Source 2: ${c2.filename}`) })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: new RegExp(`Source 1: ${c1.filename}`) }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: new RegExp(`Source 2: ${c2.filename}`) }),
+    ).toBeVisible();
   });
 });
