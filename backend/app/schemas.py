@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class StubResponse(BaseModel):
@@ -117,8 +117,49 @@ class ChatRequest(BaseModel):
     question: str
 
 
+class CitationOut(BaseModel):
+    """One retrieved chunk cited in a chat answer."""
+
+    number: int
+    document_id: uuid.UUID
+    chunk_id: uuid.UUID
+    filename: str | None = None
+    page_ref: int | None = None
+    section_ref: str | None = None
+    text_preview: str | None = None
+    score: float
+
+
+class ChatResponse(BaseModel):
+    """POST /chat's response (contract): retrieval (AC-049/AC-050) has
+    already run by the time this is built. `answer` is a placeholder until
+    US-042-1 wires in real generation; `citations` is never more than what
+    retrieval actually returned, and is empty exactly when retrieval found
+    nothing at or above the in-force threshold."""
+
+    conversation_id: str
+    answer: str
+    from_documents: bool
+    citations: list[CitationOut] = Field(default_factory=list)
+
+
+class SettingsOut(BaseModel):
+    """GET/PATCH /settings response (contract): the values in force right
+    now, read fresh from the database on every call -- never a value
+    captured at import time or hard-coded in the router."""
+
+    similarity_threshold: float
+    answer_model: str
+
+
 class SettingsPatchRequest(BaseModel):
-    threshold: float | None = None
+    """PATCH /settings body (contract). `similarity_threshold` must be a
+    valid cosine-similarity bound -- outside [0, 1] is rejected with 422
+    before the handler ever runs. `answer_model` is accepted too (the
+    underlying `app_settings` row already exists for it) but the contract's
+    documented use is `similarity_threshold`."""
+
+    similarity_threshold: float | None = Field(default=None, ge=0.0, le=1.0)
     answer_model: str | None = None
 
 
