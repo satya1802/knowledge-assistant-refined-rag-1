@@ -61,7 +61,15 @@ function citation(suffix: string, overrides: Partial<Citation> & { number: numbe
 
 function isoAt(daysAgo: number, hour: number, minute: number): string {
   const now = new Date();
-  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysAgo, hour, minute, 0, 0);
+  const d = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() - daysAgo,
+    hour,
+    minute,
+    0,
+    0,
+  );
   return d.toISOString();
 }
 
@@ -149,23 +157,32 @@ test.describe("Sidebar conversations grouped by date (US-027)", () => {
     await expect(headings.nth(2)).toHaveText("Previous Conversations");
 
     // Within "Today": later conversation first.
-    const todayGroup = page.locator("div").filter({ has: headings.nth(0) }).first();
+    const todayGroup = page
+      .locator("div")
+      .filter({ has: headings.nth(0) })
+      .first();
     const todayButtons = todayGroup.getByRole("button", { name: new RegExp(`${suffix}$`) });
     await expect(todayButtons.nth(0)).toHaveText(todayLater.title);
     await expect(todayButtons.nth(1)).toHaveText(todayEarlier.title);
 
     // Within "Previous Conversations": the 3-days-back entry (newer) comes
     // before the 5-days-back entry (older).
-    const previousGroup = page.locator("div").filter({ has: headings.nth(2) }).first();
+    const previousGroup = page
+      .locator("div")
+      .filter({ has: headings.nth(2) })
+      .first();
     const previousButtons = previousGroup.getByRole("button", { name: new RegExp(`${suffix}$`) });
     await expect(previousButtons.nth(0)).toHaveText(previousNewer.title);
     await expect(previousButtons.nth(1)).toHaveText(previousOlder.title);
 
     // "Yesterday" has exactly its one conversation.
-    const yesterdayGroup = page.locator("div").filter({ has: headings.nth(1) }).first();
-    await expect(
-      yesterdayGroup.getByRole("button", { name: new RegExp(`${suffix}$`) }),
-    ).toHaveText(yesterday.title);
+    const yesterdayGroup = page
+      .locator("div")
+      .filter({ has: headings.nth(1) })
+      .first();
+    await expect(yesterdayGroup.getByRole("button", { name: new RegExp(`${suffix}$`) })).toHaveText(
+      yesterday.title,
+    );
   });
 
   test("a heading is omitted when its group has no conversations", async ({ page }) => {

@@ -737,9 +737,7 @@ describe("Chat screen", () => {
 
       await waitFor(() => expect(screen.getByText("Thirty days [1].")).toBeInTheDocument());
       expect(screen.getByText("From your documents")).toBeInTheDocument();
-      expect(
-        screen.getByRole("button", { name: /source 1: refunds\.txt/i }),
-      ).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /source 1: refunds\.txt/i })).toBeInTheDocument();
 
       expect(window.localStorage.length).toBe(0);
       expect(window.sessionStorage.length).toBe(0);
