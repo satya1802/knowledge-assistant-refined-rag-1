@@ -218,8 +218,7 @@ def get_generation_client() -> GenerationClient:
     if not settings.groq_api_key:
         return _DisabledClient(
             message=(
-                "The Groq AI provider is disabled: set GROQ_API_KEY to enable "
-                "answer generation."
+                "The Groq AI provider is disabled: set GROQ_API_KEY to enable answer generation."
             )
         )
     return _GroqClient(api_key=settings.groq_api_key, model=settings.answer_model)

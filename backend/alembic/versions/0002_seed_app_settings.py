@@ -45,9 +45,7 @@ _DEFAULT_SIMILARITY_THRESHOLD = 0.62
 
 def upgrade() -> None:
     connection = op.get_bind()
-    existing = {
-        row[0] for row in connection.execute(sa.select(_app_settings.c.key)).fetchall()
-    }
+    existing = {row[0] for row in connection.execute(sa.select(_app_settings.c.key)).fetchall()}
 
     now = datetime.utcnow()
     rows = []
