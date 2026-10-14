@@ -75,6 +75,58 @@ function errorMessage(err: unknown): string {
   return "Something went wrong reaching the assistant. Try again.";
 }
 
+// US-027-1: day-level grouping of the sidebar, derived purely from
+// `updated_at` -- a conversation with no (or unparsable) timestamp falls
+// back to "Previous Conversations" rather than crashing the grouping.
+type GroupKey = "today" | "yesterday" | "previous";
+
+function startOfDay(date: Date): number {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+function groupKeyFor(updatedAt: string | null | undefined, now: Date): GroupKey {
+  if (!updatedAt) return "previous";
+  const date = new Date(updatedAt);
+  if (Number.isNaN(date.getTime())) return "previous";
+  const diffDays = Math.round((startOfDay(now) - startOfDay(date)) / 86_400_000);
+  if (diffDays === 0) return "today";
+  if (diffDays === 1) return "yesterday";
+  return "previous";
+}
+
+function timeOf(conversation: ConversationSummary): number {
+  if (!conversation.updated_at) return 0;
+  const t = new Date(conversation.updated_at).getTime();
+  return Number.isNaN(t) ? 0 : t;
+}
+
+const GROUP_ORDER: Array<{ key: GroupKey; label: string }> = [
+  { key: "today", label: "Today" },
+  { key: "yesterday", label: "Yesterday" },
+  { key: "previous", label: "Previous Conversations" },
+];
+
+function groupConversations(
+  conversations: ConversationSummary[],
+  now: Date,
+): Array<{ key: GroupKey; label: string; items: ConversationSummary[] }> {
+  const buckets: Record<GroupKey, ConversationSummary[]> = {
+    today: [],
+    yesterday: [],
+    previous: [],
+  };
+  for (const conversation of conversations) {
+    buckets[groupKeyFor(conversation.updated_at, now)].push(conversation);
+  }
+  for (const key of Object.keys(buckets) as GroupKey[]) {
+    buckets[key].sort((a, b) => timeOf(b) - timeOf(a));
+  }
+  // AC-071: a heading is omitted entirely when its group has no conversations.
+  return GROUP_ORDER.map(({ key, label }) => ({ key, label, items: buckets[key] })).filter(
+    (group) => group.items.length > 0,
+  );
+}
+
 export default function Chat() {
   const [conversations, setConversations] = React.useState<ConversationSummary[]>([]);
   const [listState, setListState] = React.useState<ListState>("loading");
@@ -110,10 +162,19 @@ export default function Chat() {
     void loadConversations();
   }, [loadConversations]);
 
+  const groupedConversations = React.useMemo(
+    () => groupConversations(conversations, new Date()),
+    [conversations],
+  );
+
   const openConversation = React.useCallback(async (id: string) => {
     setConversationId(id);
     setDetailState("loading");
     try {
+      // AC-072/AC-067/AC-070: the full turn history is re-fetched from the
+      // backend every time a conversation is selected (including after a
+      // reload) -- there is no sessionStorage, localStorage or module-level
+      // cache standing in as the source of truth.
       const detail = await apiFetch<ConversationDetail>(`/conversations/${id}`);
       setMessages(
         (detail.messages ?? []).map((message) => ({
@@ -243,20 +304,27 @@ export default function Chat() {
         ) : conversations.length === 0 ? (
           <p className="text-sm text-[var(--brand-fg-muted)]">{"No conversations yet."}</p>
         ) : (
-          <div className="flex flex-col gap-1 overflow-y-auto">
-            {conversations.map((conversation) => (
-              <button
-                key={conversation.id}
-                type="button"
-                onClick={() => void openConversation(conversation.id)}
-                className="rounded-[var(--brand-radius)] px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--brand-hover)]"
-                style={{
-                  backgroundColor:
-                    conversation.id === conversationId ? "var(--brand-hover)" : "transparent",
-                }}
-              >
-                {conversation.title || "Untitled conversation"}
-              </button>
+          <div className="flex flex-col gap-3 overflow-y-auto">
+            {groupedConversations.map((group) => (
+              <div key={group.key} className="flex flex-col gap-1">
+                <h2 className="px-3 text-[11px] font-semibold uppercase tracking-[0.1em] text-[var(--brand-fg-muted)]">
+                  {group.label}
+                </h2>
+                {group.items.map((conversation) => (
+                  <button
+                    key={conversation.id}
+                    type="button"
+                    onClick={() => void openConversation(conversation.id)}
+                    className="rounded-[var(--brand-radius)] px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--brand-hover)]"
+                    style={{
+                      backgroundColor:
+                        conversation.id === conversationId ? "var(--brand-hover)" : "transparent",
+                    }}
+                  >
+                    {conversation.title || "Untitled conversation"}
+                  </button>
+                ))}
+              </div>
             ))}
           </div>
         )}

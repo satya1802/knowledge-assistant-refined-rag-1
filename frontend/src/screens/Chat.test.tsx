@@ -20,7 +20,7 @@ function err(status: number, detail: string) {
 }
 
 type FetchOpts = {
-  conversations?: Array<{ id: string; title?: string | null }>;
+  conversations?: Array<{ id: string; title?: string | null; updated_at?: string | null }>;
   conversationDetail?: Record<string, { id: string; title?: string | null; messages?: unknown[] }>;
   chatResponder?: (body: {
     conversation_id?: string;
@@ -134,6 +134,16 @@ async function renderWithGroundedAnswer(chatResponder: FetchOpts["chatResponder"
   await screen.findByText(/grounded answer/i, { exact: false }).catch(() => undefined);
 
   return { fetchMock, user };
+}
+
+// Timestamps built relative to the real current time, so the grouping
+// tests do not depend on faking the system clock (which deadlocks against
+// testing-library's internal timers in this setup).
+function hoursAgoIso(hours: number): string {
+  return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+}
+function daysAgoIso(days: number): string {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 }
 
 describe("Chat screen", () => {
@@ -625,6 +635,117 @@ describe("Chat screen", () => {
       await waitFor(() =>
         expect(screen.getByText(/couldn't download that document/i)).toBeInTheDocument(),
       );
+    });
+  });
+
+  describe("sidebar grouping (US-027-1)", () => {
+    it("AC-071: renders Today, Yesterday and Previous Conversations headings, most recent first within each", async () => {
+      const { fetchMock } = makeFetch({
+        conversations: [
+          { id: "conv-today-early", title: "Today early", updated_at: hoursAgoIso(10) },
+          { id: "conv-today-late", title: "Today late", updated_at: hoursAgoIso(1) },
+          { id: "conv-yesterday", title: "Yesterday chat", updated_at: hoursAgoIso(30) },
+          { id: "conv-older", title: "Old chat", updated_at: daysAgoIso(10) },
+        ],
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      render(<Chat />);
+
+      await waitFor(() => expect(screen.getByText("Today early")).toBeInTheDocument());
+
+      expect(screen.getByText("Today")).toBeInTheDocument();
+      expect(screen.getByText("Yesterday")).toBeInTheDocument();
+      expect(screen.getByText("Previous Conversations")).toBeInTheDocument();
+
+      // Most recent first within the Today group.
+      const titles = screen
+        .getAllByRole("button")
+        .map((el) => el.textContent)
+        .filter((t): t is string => Boolean(t) && t !== "New conversation");
+      const todayLateIdx = titles.findIndex((t) => t?.includes("Today late"));
+      const todayEarlyIdx = titles.findIndex((t) => t?.includes("Today early"));
+      expect(todayLateIdx).toBeGreaterThanOrEqual(0);
+      expect(todayEarlyIdx).toBeGreaterThan(todayLateIdx);
+
+      expect(screen.getByText("Yesterday chat")).toBeInTheDocument();
+      expect(screen.getByText("Old chat")).toBeInTheDocument();
+    });
+
+    it("AC-071: omits the Yesterday heading entirely when there are no conversations from yesterday", async () => {
+      const { fetchMock } = makeFetch({
+        conversations: [
+          { id: "conv-today", title: "Today chat", updated_at: hoursAgoIso(1) },
+          { id: "conv-older", title: "Old chat", updated_at: daysAgoIso(10) },
+        ],
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      render(<Chat />);
+
+      await waitFor(() => expect(screen.getByText("Today chat")).toBeInTheDocument());
+
+      expect(screen.getByText("Today")).toBeInTheDocument();
+      expect(screen.queryByText("Yesterday")).not.toBeInTheDocument();
+      expect(screen.getByText("Previous Conversations")).toBeInTheDocument();
+    });
+
+    it("AC-071: a conversation with no updated_at falls back to Previous Conversations", async () => {
+      const { fetchMock } = makeFetch({
+        conversations: [{ id: "conv-no-date", title: "Undated chat" }],
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      render(<Chat />);
+
+      await waitFor(() => expect(screen.getByText("Undated chat")).toBeInTheDocument());
+      expect(screen.getByText("Previous Conversations")).toBeInTheDocument();
+      expect(screen.queryByText("Today")).not.toBeInTheDocument();
+      expect(screen.queryByText("Yesterday")).not.toBeInTheDocument();
+    });
+
+    it("AC-072/AC-067/AC-070: selecting a grouped conversation restores its history from GET /conversations/{id} alone", async () => {
+      const { fetchMock } = makeFetch({
+        conversations: [{ id: "conv-today", title: "Today chat", updated_at: hoursAgoIso(1) }],
+        conversationDetail: {
+          "conv-today": {
+            id: "conv-today",
+            title: "Today chat",
+            messages: [
+              { id: "m1", role: "user", content: "What is the refund window?" },
+              {
+                id: "m2",
+                role: "assistant",
+                content: "Thirty days [1].",
+                from_documents: true,
+                citations: [
+                  {
+                    number: 1,
+                    document_id: "doc-9",
+                    chunk_id: "chunk-9",
+                    filename: "refunds.txt",
+                    score: 0.88,
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      render(<Chat />);
+
+      await screen.findByText("Today chat");
+      await userEvent.setup().click(screen.getByText("Today chat"));
+
+      await waitFor(() => expect(screen.getByText("Thirty days [1].")).toBeInTheDocument());
+      expect(screen.getByText("From your documents")).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /source 1: refunds\.txt/i }),
+      ).toBeInTheDocument();
+
+      expect(window.localStorage.length).toBe(0);
+      expect(window.sessionStorage.length).toBe(0);
+
+      const detailCall = findCall(fetchMock, (url) => url.endsWith("/conversations/conv-today"));
+      expect(detailCall).toBeTruthy();
     });
   });
 });
