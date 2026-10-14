@@ -24,10 +24,23 @@ A fake `EmbeddingProvider` (injected via `app.retrieval.get_embedding_provider`)
 and a fake `GenerationClient` (injected via `app.generation.get_generation_client`)
 stand in throughout -- no real network call, no real Groq key, matching the
 pattern in `tests/test_chat_generation_errors.py` and `tests/test_embedding.py`.
+
+Every test in this module gets a clean `documents`/`chunks`/`citations`
+table before and after it runs (see `_isolated_knowledge_base` below). Two
+reasons this matters: (1) several tests here assert an exact retrieved set
+against a fixed query vector, so a `Chunk` left over from an earlier test
+in this module -- scoring above threshold against that same query vector --
+would silently leak into a later test's "below threshold" or "empty
+knowledge base" expectations; and (2) `Document` rows created directly here
+(bypassing the normal upload flow) are real rows in the same database other
+test modules' `/documents` listing assertions query against, so leaving any
+behind after this module runs would corrupt an unrelated module's exact-set
+assertions (e.g. `tests/test_documents_delete.py`'s status/type filters).
 """
 
 import uuid
 
+import pytest
 from fastapi.testclient import TestClient
 
 import app.generation as generation_module
@@ -86,7 +99,9 @@ def _seed_document(db, *, filename: str, uploaded_by: uuid.UUID) -> Document:
 
 
 def _seed_chunk(db, document: Document, *, content: str, page_ref: int, embedding: list[float]):
-    [chunk] = persist_chunks(db, document, [ChunkDraft(index=0, content=content, page_ref=page_ref)])
+    [chunk] = persist_chunks(
+        db, document, [ChunkDraft(index=0, content=content, page_ref=page_ref)]
+    )
     chunk.embedding = embedding
     db.add(chunk)
     db.commit()
@@ -95,9 +110,9 @@ def _seed_chunk(db, document: Document, *, content: str, page_ref: int, embeddin
 
 
 def _wipe_chunks_and_documents() -> None:
-    """Guarantees a literal empty knowledge base for the empty-KB test,
-    independent of what earlier tests in this module (or module ordering)
-    left behind in the shared sqlite file (see tests/conftest.py)."""
+    """Guarantees a literal empty knowledge base, independent of what any
+    other test -- in this module or another -- left behind in the shared
+    sqlite file (see tests/conftest.py)."""
     db = SessionLocal()
     try:
         db.query(Citation).delete()
@@ -106,6 +121,18 @@ def _wipe_chunks_and_documents() -> None:
         db.commit()
     finally:
         db.close()
+
+
+@pytest.fixture(autouse=True)
+def _isolated_knowledge_base():
+    """Every test in this module starts from, and leaves behind, zero
+    `Document`/`Chunk`/`Citation` rows: this module is the only one that
+    seeds chunks with a fixed, reused query vector directly against the
+    ORM, so without this a chunk left over from one test would leak into a
+    later test's retrieval (here, or in a module collected afterwards)."""
+    _wipe_chunks_and_documents()
+    yield
+    _wipe_chunks_and_documents()
 
 
 class _FakeEmbeddingProvider:
@@ -158,7 +185,11 @@ def test_grounded_path_only_passes_above_threshold_chunks_and_numbers_citations(
             db, document, content="Matching content.", page_ref=1, embedding=_MATCH_VECTOR
         )
         _seed_chunk(
-            db, document, content="Unrelated content.", page_ref=2, embedding=_BELOW_THRESHOLD_VECTOR
+            db,
+            document,
+            content="Unrelated content.",
+            page_ref=2,
+            embedding=_BELOW_THRESHOLD_VECTOR,
         )
     finally:
         db.close()
@@ -214,10 +245,18 @@ def test_fallback_path_still_invokes_embedding_before_generation_sees_empty_cont
     try:
         document = _seed_document(db, filename="fallback.txt", uploaded_by=admin.id)
         _seed_chunk(
-            db, document, content="Below threshold one.", page_ref=1, embedding=_BELOW_THRESHOLD_VECTOR
+            db,
+            document,
+            content="Below threshold one.",
+            page_ref=1,
+            embedding=_BELOW_THRESHOLD_VECTOR,
         )
         _seed_chunk(
-            db, document, content="Below threshold two.", page_ref=2, embedding=_BELOW_THRESHOLD_VECTOR
+            db,
+            document,
+            content="Below threshold two.",
+            page_ref=2,
+            embedding=_BELOW_THRESHOLD_VECTOR,
         )
     finally:
         db.close()
@@ -232,7 +271,8 @@ def test_fallback_path_still_invokes_embedding_before_generation_sees_empty_cont
     before = _row_counts()
 
     response = client.post(
-        "/chat", json={"conversation_id": conversation_id, "question": "Totally unrelated question."}
+        "/chat",
+        json={"conversation_id": conversation_id, "question": "Totally unrelated question."},
     )
 
     assert response.status_code == 200

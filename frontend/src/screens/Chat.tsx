@@ -134,8 +134,8 @@ export default function Chat() {
 
   // Hook point for US-023-1's source panel. Selecting a chip does nothing
   // observable yet -- opening the panel is that ticket's work, not this one's.
-  const handleSelectCitation = React.useCallback((_citation: Citation) => {
-    // intentionally empty
+  const handleSelectCitation = React.useCallback((citation: Citation) => {
+    void citation;
   }, []);
 
   const handleSend = async (event?: React.FormEvent) => {
@@ -324,11 +324,7 @@ export default function Chat() {
                       )
                     ) : null}
                     {groundedChips.length > 0 ? (
-                      <div
-                        role="group"
-                        aria-label="Sources"
-                        className="flex flex-wrap gap-1"
-                      >
+                      <div role="group" aria-label="Sources" className="flex flex-wrap gap-1">
                         {groundedChips.map((citation) => (
                           <button
                             key={citation.chunk_id}

@@ -2,6 +2,12 @@
 that calling one returns its typed placeholder rather than a 404 -- the two
 things a development ticket needs true before it can replace a stub with
 real behaviour.
+
+`/conversations/{conversation_id}` (GET and DELETE) is no longer a stub as
+of US-022-3: both now return real, user-scoped data (see
+`tests/test_chat_rag.py`), so this module no longer asserts the placeholder
+body for either -- that assertion lived here only until the real
+implementation landed.
 """
 
 from fastapi.testclient import TestClient
@@ -34,24 +40,3 @@ def test_every_approved_endpoint_is_registered() -> None:
     paths = set(client.get("/openapi.json").json()["paths"])
 
     assert EXPECTED_PATHS <= paths
-
-
-def test_a_stub_route_returns_its_placeholder() -> None:
-    # GET /documents/{id}/download is real now (US-013-2, database-backed);
-    # it is covered by tests/test_documents_download.py. GET
-    # /conversations/{id} is still a stub, exactly what this check needs.
-    response = client.get("/conversations/some-id")
-
-    assert response.status_code == 200
-    assert response.json() == {
-        "endpoint": "GET /conversations/{id}",
-        "status": "not_implemented",
-        "detail": "Scaffolded from the approved API spec; no behaviour yet.",
-    }
-
-
-def test_a_no_content_route_returns_no_body() -> None:
-    response = client.delete("/conversations/some-id")
-
-    assert response.status_code == 204
-    assert response.content == b""
