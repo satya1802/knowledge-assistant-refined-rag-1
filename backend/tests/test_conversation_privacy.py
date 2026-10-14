@@ -87,9 +87,7 @@ def _message_count(conversation_id: str) -> int:
     db = SessionLocal()
     try:
         return (
-            db.query(Message)
-            .filter(Message.conversation_id == uuid.UUID(conversation_id))
-            .count()
+            db.query(Message).filter(Message.conversation_id == uuid.UUID(conversation_id)).count()
         )
     finally:
         db.close()
@@ -264,10 +262,10 @@ def test_post_chat_with_another_users_conversation_id_is_refused_and_writes_no_m
 
     before_count = _message_count(conversation_id)
 
-    monkeypatch.setattr(retrieval_module, "get_embedding_provider", lambda: _FakeEmbeddingProvider())
     monkeypatch.setattr(
-        generation_module, "get_generation_client", lambda: _FakeGenerationClient()
+        retrieval_module, "get_embedding_provider", lambda: _FakeEmbeddingProvider()
     )
+    monkeypatch.setattr(generation_module, "get_generation_client", lambda: _FakeGenerationClient())
 
     response = stranger_client.post(
         "/chat",
