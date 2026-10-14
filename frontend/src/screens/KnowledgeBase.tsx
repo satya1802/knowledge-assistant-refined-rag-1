@@ -1,6 +1,6 @@
 import * as React from "react";
 
-import { apiFetch, ApiError } from "@/lib/api";
+import { apiFetch, apiFetchBlob, saveBlob, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import * as UI from "@/lib/ui";
 import { Icons } from "@/lib/icons";
@@ -107,6 +107,7 @@ export default function KnowledgeBase() {
   const [deleteTarget, setDeleteTarget] = React.useState<DocumentRow | null>(null);
   const [deleting, setDeleting] = React.useState(false);
   const [rowError, setRowError] = React.useState("");
+  const [downloadingId, setDownloadingId] = React.useState<string | null>(null);
 
   const hasActiveFilters = Boolean(query.trim() || statusFilter || typeFilter);
 
@@ -234,10 +235,21 @@ export default function KnowledgeBase() {
     }
   };
 
-  const download = (doc: DocumentRow) => {
-    void apiFetch(`/documents/${doc.id}/download`).catch(() => {
+  // AC-027: fetched through the blob-capable helper, never apiFetch's
+  // JSON-parsing path, so the original bytes reach disk unchanged. The
+  // filename comes from the response's Content-Disposition; the row's own
+  // filename is only a fallback if that header is missing or unparsable.
+  const download = async (doc: DocumentRow) => {
+    setRowError("");
+    setDownloadingId(doc.id);
+    try {
+      const { blob, filename } = await apiFetchBlob(`/documents/${doc.id}/download`);
+      saveBlob(blob, filename || doc.filename);
+    } catch {
       setRowError("Couldn't download that document. Try again.");
-    });
+    } finally {
+      setDownloadingId(null);
+    }
   };
 
   const clearFilters = () => {
@@ -486,9 +498,11 @@ export default function KnowledgeBase() {
                           type="button"
                           variant="secondary"
                           size="sm"
-                          onClick={() => download(doc)}
+                          disabled={downloadingId === doc.id}
+                          onClick={() => void download(doc)}
                         >
-                          <Download size={14} /> {"Download"}
+                          <Download size={14} />{" "}
+                          {downloadingId === doc.id ? "Downloading…" : "Download"}
                         </Button>
                         {isAdmin && doc.status === "failed" ? (
                           <Button

@@ -54,3 +54,56 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   }
   return response.status === 204 ? (undefined as T) : ((await response.json()) as T);
 }
+
+function parseContentDispositionFilename(header: string | null): string {
+  if (!header) return "";
+  // Matches both `filename="quoted name.ext"` and an unquoted `filename=name.ext`.
+  const quoted = /filename\*?=(?:UTF-8'')?"?([^";\n]+)"?/i.exec(header);
+  if (!quoted || !quoted[1]) return "";
+  try {
+    return decodeURIComponent(quoted[1]);
+  } catch {
+    return quoted[1];
+  }
+}
+
+/**
+ * Fetches binary content directly, bypassing `apiFetch`'s JSON parsing --
+ * routing a download through that path would corrupt the bytes. Returns the
+ * raw `Blob` plus the filename recovered from `Content-Disposition`, so the
+ * caller can fall back to a filename it already knows when the header is
+ * absent or unparsable (AC-027).
+ */
+export async function apiFetchBlob(
+  path: string,
+  init?: RequestInit,
+): Promise<{ blob: Blob; filename: string }> {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    credentials: "include",
+    headers: { ...(init?.headers ?? {}) },
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, `${init?.method ?? "GET"} ${path} failed: ${response.status}`);
+  }
+  const blob = await response.blob();
+  const filename = parseContentDispositionFilename(response.headers.get("Content-Disposition"));
+  return { blob, filename };
+}
+
+/**
+ * Saves a `Blob` to the user's machine under `filename`, without the bytes
+ * ever round-tripping through anything that could alter them (no JSON parse,
+ * no text re-encode): an object URL, a transient anchor with a `download`
+ * attribute, and a click, then the URL is revoked.
+ */
+export function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}

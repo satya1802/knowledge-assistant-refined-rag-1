@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import KnowledgeBase from "./KnowledgeBase";
 import { AuthProvider } from "@/lib/auth";
@@ -34,8 +34,14 @@ function statsFromDocs(docs: Doc[]) {
   };
 }
 
-function makeFetch(opts: { role: string; documents: Doc[] }) {
+function makeFetch(opts: {
+  role: string;
+  documents: Doc[];
+  downloadHeaders?: Record<string, string>;
+  downloadOk?: boolean;
+}) {
   let docs = [...opts.documents];
+  const reprocessCalls: Array<{ id: string; mode: string }> = [];
   const fetchMock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
     const u = new URL(url, "http://localhost");
     const path = u.pathname;
@@ -59,7 +65,29 @@ function makeFetch(opts: { role: string; documents: Doc[] }) {
     if (path === "/documents/stats" && method === "GET") {
       return ok(statsFromDocs(docs));
     }
+    if (/\/documents\/[^/]+\/download$/.test(path) && method === "GET") {
+      if (opts.downloadOk === false) {
+        return Promise.resolve({
+          ok: false,
+          status: 500,
+          json: async () => ({}),
+          clone() {
+            return this;
+          },
+        });
+      }
+      const headers = new Headers(opts.downloadHeaders ?? {});
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        headers,
+        blob: async () => new Blob(["file-bytes"], { type: "application/octet-stream" }),
+      });
+    }
     if (/\/documents\/[^/]+\/reprocess$/.test(path) && method === "POST") {
+      const id = path.split("/")[2];
+      const body = init?.body ? JSON.parse(init.body as string) : {};
+      reprocessCalls.push({ id, mode: body.mode });
       return ok({ endpoint: "x" });
     }
     if (/\/documents\/[^/]+$/.test(path) && method === "DELETE") {
@@ -74,6 +102,7 @@ function makeFetch(opts: { role: string; documents: Doc[] }) {
   });
   return {
     fetchMock,
+    reprocessCalls,
     setDocuments(next: Doc[]) {
       docs = next;
     },
@@ -114,6 +143,15 @@ function statTileValue(label: string): string {
     (content, element) => content === label && element?.tagName === "P",
   );
   return labelNode.closest("div")?.textContent ?? "";
+}
+
+function findCall(
+  fetchMock: ReturnType<typeof vi.fn>,
+  predicate: (url: string, init: RequestInit | undefined) => boolean,
+) {
+  return fetchMock.mock.calls.find((call) =>
+    predicate(call[0] as string, call[1] as RequestInit | undefined),
+  );
 }
 
 describe("KnowledgeBase screen", () => {
@@ -171,6 +209,63 @@ describe("KnowledgeBase screen", () => {
     expect(within(row).queryByRole("button", { name: /delete/i })).not.toBeInTheDocument();
     expect(within(row).queryByRole("button", { name: /re-?index/i })).not.toBeInTheDocument();
     expect(within(row).queryByRole("button", { name: /^retry$/i })).not.toBeInTheDocument();
+  });
+
+  it("Retry is offered only on Failed rows and Re-index only on Ready rows (AC-031/AC-032)", async () => {
+    const { fetchMock } = makeFetch({
+      role: "admin",
+      documents: [
+        doc({ id: "d-ready", filename: "ready.pdf", status: "ready" }),
+        doc({ id: "d-failed", filename: "failed.pdf", status: "failed" }),
+        doc({ id: "d-processing", filename: "processing.pdf", status: "processing" }),
+      ],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderKB();
+
+    const readyRow = await screen.findByRole("row", { name: /ready\.pdf/i });
+    expect(within(readyRow).queryByRole("button", { name: /^retry$/i })).not.toBeInTheDocument();
+    const failedRow = screen.getByRole("row", { name: /failed\.pdf/i });
+    expect(within(failedRow).queryByRole("button", { name: /re-?index/i })).not.toBeInTheDocument();
+    const processingRow = screen.getByRole("row", { name: /processing\.pdf/i });
+    expect(
+      within(processingRow).queryByRole("button", { name: /^retry$/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(processingRow).queryByRole("button", { name: /re-?index/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("Retry posts /documents/{id}/reprocess with mode retry and refreshes (AC-031)", async () => {
+    const { fetchMock, reprocessCalls } = makeFetch({
+      role: "admin",
+      documents: [doc({ id: "d-failed", filename: "failed.pdf", status: "failed" })],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderKB();
+
+    const row = await screen.findByRole("row", { name: /failed\.pdf/i });
+    const user = userEvent.setup();
+    await user.click(within(row).getByRole("button", { name: /^retry$/i }));
+
+    await waitFor(() => expect(reprocessCalls).toContainEqual({ id: "d-failed", mode: "retry" }));
+  });
+
+  it("Re-index posts /documents/{id}/reprocess with mode reindex and refreshes (AC-032)", async () => {
+    const { fetchMock, reprocessCalls } = makeFetch({
+      role: "admin",
+      documents: [doc({ id: "d-ready", filename: "ready.pdf", status: "ready" })],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderKB();
+
+    const row = await screen.findByRole("row", { name: /ready\.pdf/i });
+    const user = userEvent.setup();
+    await user.click(within(row).getByRole("button", { name: /re-?index/i }));
+
+    await waitFor(() =>
+      expect(reprocessCalls).toContainEqual({ id: "d-ready", mode: "reindex" }),
+    );
   });
 
   it("shows the administrator-upload empty state when there are no documents at all, for an admin (AC-153)", async () => {
@@ -302,7 +397,7 @@ describe("KnowledgeBase screen", () => {
     await waitFor(() => expect(screen.getByText("report.pdf")).toBeInTheDocument());
   });
 
-  it("deleting a document updates the table and tiles without a manual refresh (AC-024)", async () => {
+  it("deleting a document updates the table and tiles without a manual refresh (AC-024/AC-029)", async () => {
     const { fetchMock } = makeFetch({
       role: "admin",
       documents: [doc({ id: "del-1", filename: "to-delete.pdf" })],
@@ -321,6 +416,127 @@ describe("KnowledgeBase screen", () => {
     await waitFor(() =>
       expect(screen.getByText("Total").closest("div")?.textContent).toContain("0"),
     );
+    const deleteCall = findCall(
+      fetchMock,
+      (url, init) => url.endsWith("/documents/del-1") && init?.method === "DELETE",
+    );
+    expect(deleteCall).toBeTruthy();
+  });
+
+  it("cancelling the delete confirmation issues no DELETE request and leaves the row in Ready (AC-028)", async () => {
+    const { fetchMock } = makeFetch({
+      role: "admin",
+      documents: [doc({ id: "keep-1", filename: "keep-me.pdf", status: "ready" })],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderKB();
+
+    const row = await screen.findByRole("row", { name: /keep-me\.pdf/i });
+    const user = userEvent.setup();
+    await user.click(within(row).getByRole("button", { name: /delete/i }));
+
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: /cancel/i }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("row", { name: /keep-me\.pdf/i })).toBeInTheDocument();
+    expect(
+      within(screen.getByRole("row", { name: /keep-me\.pdf/i })).getByText("ready"),
+    ).toBeInTheDocument();
+    const deleteCall = findCall(fetchMock, (_url, init) => init?.method === "DELETE");
+    expect(deleteCall).toBeFalsy();
+  });
+
+  describe("download (AC-027)", () => {
+    let originalCreateObjectURL: typeof URL.createObjectURL;
+    let originalRevokeObjectURL: typeof URL.revokeObjectURL;
+
+    beforeEach(() => {
+      originalCreateObjectURL = URL.createObjectURL;
+      originalRevokeObjectURL = URL.revokeObjectURL;
+    });
+
+    afterEach(() => {
+      URL.createObjectURL = originalCreateObjectURL;
+      URL.revokeObjectURL = originalRevokeObjectURL;
+    });
+
+    it("fetches the binary and saves it under the Content-Disposition filename", async () => {
+      const { fetchMock } = makeFetch({
+        role: "admin",
+        documents: [doc({ id: "dl-1", filename: "row-name.pdf" })],
+        downloadHeaders: { "Content-Disposition": 'attachment; filename="original-name.pdf"' },
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const createObjectURL = vi.fn().mockReturnValue("blob:fake-url");
+      const revokeObjectURL = vi.fn();
+      URL.createObjectURL = createObjectURL;
+      URL.revokeObjectURL = revokeObjectURL;
+      let downloadAttr = "";
+      const clickSpy = vi
+        .spyOn(HTMLAnchorElement.prototype, "click")
+        .mockImplementation(function (this: HTMLAnchorElement) {
+          downloadAttr = this.download;
+        });
+
+      renderKB();
+      const row = await screen.findByRole("row", { name: /row-name\.pdf/i });
+      const user = userEvent.setup();
+      await user.click(within(row).getByRole("button", { name: /download/i }));
+
+      await waitFor(() => expect(createObjectURL).toHaveBeenCalled());
+      expect(clickSpy).toHaveBeenCalled();
+      expect(downloadAttr).toBe("original-name.pdf");
+      const downloadCall = findCall(fetchMock, (url) => url.endsWith("/documents/dl-1/download"));
+      expect(downloadCall).toBeTruthy();
+
+      clickSpy.mockRestore();
+    });
+
+    it("falls back to the row's filename when Content-Disposition is missing", async () => {
+      const { fetchMock } = makeFetch({
+        role: "admin",
+        documents: [doc({ id: "dl-2", filename: "row-fallback.pdf" })],
+        downloadHeaders: {},
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      URL.createObjectURL = vi.fn().mockReturnValue("blob:fake-url");
+      URL.revokeObjectURL = vi.fn();
+      let downloadAttr = "";
+      const clickSpy = vi
+        .spyOn(HTMLAnchorElement.prototype, "click")
+        .mockImplementation(function (this: HTMLAnchorElement) {
+          downloadAttr = this.download;
+        });
+
+      renderKB();
+      const row = await screen.findByRole("row", { name: /row-fallback\.pdf/i });
+      const user = userEvent.setup();
+      await user.click(within(row).getByRole("button", { name: /download/i }));
+
+      await waitFor(() => expect(clickSpy).toHaveBeenCalled());
+      expect(downloadAttr).toBe("row-fallback.pdf");
+
+      clickSpy.mockRestore();
+    });
+
+    it("surfaces a readable row-level error instead of a silent no-op on failure", async () => {
+      const { fetchMock } = makeFetch({
+        role: "admin",
+        documents: [doc({ id: "dl-3", filename: "will-fail.pdf" })],
+        downloadOk: false,
+      });
+      vi.stubGlobal("fetch", fetchMock);
+
+      renderKB();
+      const row = await screen.findByRole("row", { name: /will-fail\.pdf/i });
+      const user = userEvent.setup();
+      await user.click(within(row).getByRole("button", { name: /download/i }));
+
+      await waitFor(() =>
+        expect(screen.getByText(/couldn't download that document/i)).toBeInTheDocument(),
+      );
+    });
   });
 
   it("a document in Processing moves to Ready with no manual refresh once backend processing completes (AC-019/AC-024)", async () => {
