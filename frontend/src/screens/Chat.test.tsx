@@ -588,6 +588,30 @@ describe("Chat screen", () => {
       expect(chip2).toHaveFocus();
     });
 
+    it("AC-087: opening the panel moves focus into it and Tab cannot leave it (focus trap)", async () => {
+      const { user } = await renderWithGroundedAnswer(twoCitationResponder);
+
+      const chip1 = screen.getByRole("button", { name: /source 1: alpha\.txt/i });
+      await user.click(chip1);
+      const panel = await screen.findByRole("dialog");
+
+      const closeButton = within(panel).getByRole("button", { name: /close source panel/i });
+      const downloadButton = within(panel).getByRole("button", { name: /download original/i });
+
+      // Focus starts on the first focusable control inside the panel.
+      expect(closeButton).toHaveFocus();
+
+      // Tabbing from the last focusable control wraps back to the first,
+      // rather than escaping to the rest of the page.
+      downloadButton.focus();
+      await user.tab();
+      expect(closeButton).toHaveFocus();
+
+      // Shift+Tab from the first control wraps to the last.
+      await user.tab({ shift: true });
+      expect(downloadButton).toHaveFocus();
+    });
+
     it("AC-056: the download button fetches /documents/{document_id}/download and saves under its filename", async () => {
       const { fetchMock, user } = await renderWithGroundedAnswer(twoCitationResponder);
       fetchMock.mockImplementation((url: string, init?: RequestInit) => {
@@ -900,6 +924,45 @@ describe("Chat screen", () => {
 
       await screen.findByRole("alert");
       expect(screen.getByText("Alpha chat")).toBeInTheDocument();
+    });
+  });
+
+  describe("responsive layout and tokens (US-039-2)", () => {
+    it("AC-088: the sidebar toggle is a keyboard-operable button reflecting its open state", async () => {
+      const { fetchMock } = makeFetch({
+        conversations: [{ id: "conv-1", title: "Alpha chat", updated_at: hoursAgoIso(1) }],
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const user = userEvent.setup();
+      render(<Chat />);
+
+      await screen.findByText("Alpha chat");
+      const toggle = screen.getByRole("button", { name: /conversations/i });
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+      expect(toggle).toHaveAttribute("aria-controls", "chat-sidebar");
+
+      toggle.focus();
+      expect(toggle).toHaveFocus();
+      await user.keyboard("{Enter}");
+      expect(toggle).toHaveAttribute("aria-expanded", "true");
+
+      await user.keyboard("{Enter}");
+      expect(toggle).toHaveAttribute("aria-expanded", "false");
+    });
+
+    it("AC-157: an assistant turn renders the shared, token-driven brand mark", async () => {
+      const { fetchMock } = makeFetch({ conversations: [] });
+      vi.stubGlobal("fetch", fetchMock);
+      const user = userEvent.setup();
+      render(<Chat />);
+
+      await waitFor(() => expect(screen.getByText("No messages yet")).toBeInTheDocument());
+      await user.type(screen.getByPlaceholderText("Ask a question…"), "What is X?");
+      await user.click(screen.getByRole("button", { name: /send/i }));
+
+      await waitFor(() => expect(screen.getByText("The answer is 42.")).toBeInTheDocument());
+      const mark = screen.getByText("AI");
+      expect(mark).toHaveAttribute("aria-hidden", "true");
     });
   });
 });

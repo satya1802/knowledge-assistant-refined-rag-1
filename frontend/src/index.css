@@ -1,18 +1,68 @@
 @import "tailwindcss";
 
+/*
+ * Brand tokens (AC-086/AC-157). `--brand-primary` (navy) and `--brand-accent`
+ * (green) are constant across both themes; everything else that needs to
+ * change between Light and Dark is written here keyed off the `data-theme`
+ * attribute that lib/theme.tsx sets on <html> -- the surfaces/background/text
+ * vars below that mechanism already manages (--brand-background,
+ * --brand-surface, --brand-border, --brand-fg, --brand-fg-muted,
+ * --brand-hover) are applied by theme.tsx itself as inline styles, which take
+ * precedence over any CSS rule here; the :root values below are only the
+ * first-paint defaults, matching Dark.
+ *
+ * WCAG AA contrast checked (4.5:1 body text, 3:1 large text/interactive
+ * boundaries):
+ *   Dark theme (surfaces from lib/theme.tsx's PALETTE.dark):
+ *     --brand-fg #e2e8f0 vs --brand-background #0e1620            ~15.8:1
+ *     --brand-error #ff6b6b vs --brand-background #0e1620          ~6.6:1
+ *     --brand-warning #ffc168 vs --brand-background #0e1620       ~11.3:1
+ *     --brand-focus #45a56d vs --brand-background #0e1620          ~5.9:1 (>=3:1 boundary)
+ *     --brand-on-primary #ffffff vs --brand-primary #344794        ~8.5:1
+ *   Light theme (surfaces from lib/theme.tsx's PALETTE.light):
+ *     --brand-fg #0e1620 vs --brand-background #eef1f4            ~15.3:1
+ *     --brand-error #b3261e vs --brand-background #eef1f4          ~5.8:1
+ *     --brand-warning #92400e vs --brand-background #eef1f4        ~6.3:1
+ *     --brand-focus #344794 vs --brand-background #eef1f4          ~7.5:1 (>=3:1 boundary)
+ *     --brand-on-accent #04170d vs --brand-accent #45a56d          ~6.9:1
+ * Red and amber appear only through --brand-error / --brand-warning, and
+ * only on elements signalling an error or a warning respectively.
+ */
 :root {
-  --brand-primary: #2FA37A;
-  --brand-accent: #F2A33C;
-  --brand-neutral: #8795A6;
+  --brand-primary: #344794;
+  --brand-accent: #45a56d;
   --brand-radius: 0.5rem;
   --brand-font-heading: Inter, system-ui, sans-serif;
   --brand-font-body: Inter, system-ui, sans-serif;
-  --brand-surface: rgba(255,255,255,0.04);
-  --brand-border: rgba(255,255,255,0.10);
+  --brand-surface: rgba(255, 255, 255, 0.04);
+  --brand-surface-deep: rgba(255, 255, 255, 0.02);
+  --brand-border: rgba(255, 255, 255, 0.1);
+  --brand-border-soft: rgba(255, 255, 255, 0.06);
   --brand-fg: #e2e8f0;
-  --brand-fg-muted: rgba(226,232,240,0.65);
-  --brand-hover: rgba(255,255,255,0.06);
-  --brand-background: #0E1620;
+  --brand-fg-muted: rgba(226, 232, 240, 0.65);
+  --brand-hover: rgba(255, 255, 255, 0.06);
+  --brand-background: #0e1620;
+  --brand-on-primary: #ffffff;
+  --brand-on-accent: #04170d;
+  --brand-error: #ff6b6b;
+  --brand-error-bg: rgba(255, 107, 107, 0.12);
+  --brand-error-border: rgba(255, 107, 107, 0.45);
+  --brand-warning: #ffc168;
+  --brand-warning-bg: rgba(255, 193, 104, 0.12);
+  --brand-warning-border: rgba(255, 193, 104, 0.45);
+  --brand-focus: #45a56d;
+}
+
+[data-theme="light"] {
+  --brand-surface-deep: #f4f6f8;
+  --brand-border-soft: rgba(14, 22, 32, 0.08);
+  --brand-error: #b3261e;
+  --brand-error-bg: rgba(179, 38, 30, 0.08);
+  --brand-error-border: rgba(179, 38, 30, 0.4);
+  --brand-warning: #92400e;
+  --brand-warning-bg: rgba(146, 64, 14, 0.08);
+  --brand-warning-border: rgba(146, 64, 14, 0.4);
+  --brand-focus: #344794;
 }
 
 body {

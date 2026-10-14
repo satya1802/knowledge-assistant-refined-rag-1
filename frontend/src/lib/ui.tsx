@@ -8,6 +8,15 @@
  *
  * Every component reads from CSS custom properties set on the frame root, so a
  * brand change repaints without recompiling a single screen.
+ *
+ * Contrast (AC-086): the slate/emerald/amber/red Tailwind pairs below are the
+ * library's own AA-checked greyscale/semantic pairs (e.g. slate-700 on white
+ * ~8.3:1, red-700 on red-50 ~7.4:1, amber-700 on amber-50 ~5.9:1, emerald-700
+ * on emerald-50 ~5.7:1) and are used unchanged. `--brand-primary` (navy) on
+ * white text is ~8.5:1; the focus ring now reads `--brand-focus`, a token
+ * chosen per theme in index.css specifically so it clears the 3:1 boundary
+ * threshold against this kit's own backgrounds (navy itself does not, on the
+ * dark theme's near-black surface).
  */
 import * as React from "react";
 
@@ -44,11 +53,11 @@ export function Button({
       className={cx(
         "inline-flex items-center justify-center gap-2 rounded-[var(--brand-radius)] font-medium",
         "transition-colors focus-visible:outline-none focus-visible:ring-2",
-        "focus-visible:ring-[var(--brand-primary)] focus-visible:ring-offset-2",
+        "focus-visible:ring-[var(--brand-focus)] focus-visible:ring-offset-2",
         "disabled:pointer-events-none disabled:opacity-50",
         BUTTON_VARIANTS[variant] ?? BUTTON_VARIANTS.primary,
         BUTTON_SIZES[size] ?? BUTTON_SIZES.md,
-        className
+        className,
       )}
       style={{ ...branded, ...style }}
     />
@@ -61,7 +70,7 @@ export function Card({ className, ...props }: Div) {
       {...props}
       className={cx(
         "rounded-[var(--brand-radius)] border border-slate-200 bg-white shadow-sm",
-        className
+        className,
       )}
     />
   );
@@ -101,7 +110,7 @@ export function CardFooter({ className, ...props }: Div) {
 const FIELD =
   "w-full rounded-[var(--brand-radius)] border border-slate-300 bg-white px-3 py-2 text-sm " +
   "placeholder:text-slate-400 focus:border-[var(--brand-primary)] focus:outline-none " +
-  "focus:ring-1 focus:ring-[var(--brand-primary)]";
+  "focus:ring-1 focus:ring-[var(--brand-focus)]";
 
 export function Input({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={cx(FIELD, "h-9", className)} />;
@@ -175,7 +184,7 @@ const BADGE_VARIANTS: Record<string, string> = {
   success: "bg-emerald-50 text-emerald-700",
   warning: "bg-amber-50 text-amber-700",
   danger: "bg-red-50 text-red-700",
-  accent: "text-white",
+  accent: "",
 };
 
 export function Badge({
@@ -190,9 +199,13 @@ export function Badge({
       className={cx(
         "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
         BADGE_VARIANTS[variant] ?? BADGE_VARIANTS.default,
-        className
+        className,
       )}
-      style={variant === "accent" ? { backgroundColor: "var(--brand-accent)", ...style } : style}
+      style={
+        variant === "accent"
+          ? { backgroundColor: "var(--brand-accent)", color: "var(--brand-on-accent)", ...style }
+          : style
+      }
     />
   );
 }
@@ -223,7 +236,7 @@ export function TH({ className, ...props }: React.ThHTMLAttributes<HTMLTableCell
       {...props}
       className={cx(
         "px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-500",
-        className
+        className,
       )}
     />
   );
@@ -253,7 +266,7 @@ export function Avatar({
       className={cx(
         "inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-full",
         "bg-slate-200 text-xs font-medium text-slate-600",
-        className
+        className,
       )}
     >
       {src ? <img src={src} alt={name} className="h-full w-full object-cover" /> : initials}
@@ -286,9 +299,10 @@ export function Tabs({
             onClick={() => onChange?.(tab.key)}
             className={cx(
               "-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-focus)] focus-visible:ring-offset-2",
               selected
                 ? "border-[var(--brand-primary)] text-slate-900"
-                : "border-transparent text-slate-500 hover:text-slate-800"
+                : "border-transparent text-slate-500 hover:text-slate-800",
             )}
           >
             {tab.label}
@@ -314,7 +328,7 @@ export function Stat({
     <div
       className={cx(
         "rounded-[var(--brand-radius)] border border-slate-200 bg-white p-4",
-        className
+        className,
       )}
     >
       <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
@@ -345,7 +359,7 @@ export function Empty({
       className={cx(
         "flex flex-col items-center justify-center gap-2 rounded-[var(--brand-radius)]",
         "border border-dashed border-slate-300 px-6 py-12 text-center",
-        className
+        className,
       )}
     >
       <p className="text-sm font-medium text-slate-900">{title}</p>

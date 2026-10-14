@@ -23,24 +23,57 @@ type Props = {
   onClose: () => void;
 };
 
+const FOCUSABLE_SELECTOR =
+  'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
 /**
  * The side panel opened from a citation chip (US-023-1). Mounted
  * unconditionally in Chat.tsx and renders nothing when no citation is
  * selected -- Chat owns the selection state and which chip to return focus
  * to on close; this component only ever renders what it is given and calls
  * `onClose` on a close-button click or Escape (AC-057).
+ *
+ * US-039-2/AC-087: while open it is a true focus trap -- focus moves into
+ * the panel when it opens, Tab/Shift+Tab cannot leave it, and Escape closes
+ * it the same way the close button does. Returning focus to the triggering
+ * chip is Chat's responsibility (`onClose`), not this component's.
  */
 export default function SourcePanel({ citation, onClose }: Props) {
   const [downloading, setDownloading] = React.useState(false);
   const [downloadError, setDownloadError] = React.useState("");
+  const panelRef = React.useRef<HTMLElement | null>(null);
 
-  // Escape dismisses the panel exactly like the close button, but only while
-  // a citation is actually selected -- otherwise there is nothing to close.
   React.useEffect(() => {
     if (!citation) return undefined;
+
+    const focusables = (): HTMLElement[] =>
+      panelRef.current
+        ? Array.from(panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+        : [];
+
+    // Move focus into the panel as soon as it opens.
+    focusables()[0]?.focus();
+
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusables();
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
+
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [citation, onClose]);
@@ -79,10 +112,11 @@ export default function SourcePanel({ citation, onClose }: Props) {
 
   return (
     <aside
+      ref={panelRef as React.RefObject<HTMLElement>}
       role="dialog"
       aria-modal="true"
       aria-label={`Source ${citation.number}: ${citation.filename ?? "document"}`}
-      className="fixed right-0 top-0 z-50 flex h-full w-full max-w-sm flex-col gap-4 border-l p-5"
+      className="fixed right-0 top-0 z-50 flex h-full w-full flex-col gap-4 border-l p-5 md:max-w-sm"
       style={{ backgroundColor: "var(--brand-surface)", borderColor: "var(--brand-border)" }}
     >
       <div className="flex items-start justify-between gap-2">

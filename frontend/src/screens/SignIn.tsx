@@ -5,6 +5,7 @@ import React from "react";
 import * as UI from "@/lib/ui";
 import { Icons } from "@/lib/icons";
 import { brand } from "@/lib/brand";
+import { BrandMark } from "@/lib/BrandMark";
 import { useNavigate } from "@/lib/navigate";
 import { useAuth } from "@/lib/auth";
 
@@ -68,12 +69,16 @@ const alpha = (c, a) => {
 // ---------------------------------------------------------------------------
 // Decorative knowledge-base status data for the right-hand rail. No account
 // or credential data lives here -- authentication is wired to the real API.
+// Tones map to brand.ts tokens only: "good" -> accentColor (green), "watch"
+// -> warningColor (amber, in-progress/caution), "bad" -> errorColor (red,
+// an actual failure), "quiet" / "plain" -> neutral text (AC-086: red/amber
+// never appear outside an error/warning respectively).
 // ---------------------------------------------------------------------------
 const INDEX_TILES = [
   { label: "Documents", value: "86", tone: "plain" },
   { label: "Ready", value: "83", tone: "good" },
   { label: "Processing", value: "2", tone: "watch" },
-  { label: "Failed", value: "1", tone: "watch" },
+  { label: "Failed", value: "1", tone: "bad" },
 ];
 
 const ACTIVITY = [
@@ -86,7 +91,7 @@ const ACTIVITY = [
   { t: "08:17", tone: "watch", text: "Processing — Q3_Benefits_Summary.docx · 4.2 MB" },
   {
     t: "07:55",
-    tone: "watch",
+    tone: "bad",
     text: "Failed — Vendor_Contract_Scan.pdf · 11 image-only pages, no text extracted",
   },
   { t: "Sun 21:08", tone: "quiet", text: "Similarity threshold set to 0.62 by m.okafor" },
@@ -115,7 +120,13 @@ export default function Screen() {
   const textHi = lighten(brand.neutralColor, 0.8);
   const text = brand.neutralColor;
   const textDim = mix(brand.neutralColor, bg, 0.38);
-  const onPrimary = darken(bg, 0.2);
+  // AC-086: navy (brand.primaryColor) reads ~2.1:1 against this screen's dark
+  // background -- fine as a solid button fill with light text (onPrimary),
+  // but not as a text colour on the background itself. `primaryText` is a
+  // lightened derivative of the same brand token (not a new hard-coded hex)
+  // used anywhere navy needs to read as a link/label, at ~7.3:1.
+  const onPrimary = brand.onPrimaryColor;
+  const primaryText = lighten(brand.primaryColor, 0.5);
   const r = brand.radius;
 
   const [mode, setMode] = React.useState("signin"); // signin | bootstrap
@@ -243,11 +254,17 @@ export default function Screen() {
   };
 
   const toneColor = (tone) =>
-    tone === "good" ? brand.primaryColor : tone === "watch" ? brand.accentColor : textDim;
+    tone === "good"
+      ? brand.accentColor
+      : tone === "watch"
+        ? brand.warningColor
+        : tone === "bad"
+          ? brand.errorColor
+          : textDim;
 
   const fieldStyle = (invalid) => ({
     backgroundColor: surfaceDeep,
-    borderColor: invalid ? brand.accentColor : line,
+    borderColor: invalid ? brand.errorColor : line,
     color: textHi,
     borderRadius: r,
     fontVariantNumeric: "tabular-nums",
@@ -264,15 +281,16 @@ export default function Screen() {
         backgroundColor: bg,
         color: textHi,
         fontFamily: brand.fontBody,
-        "--ka-accent": brand.accentColor,
+        "--ka-accent": brand.errorColor,
         "--ka-dim": textDim,
+        "--ka-focus": brand.accentColor,
       }}
     >
       <style>{`
         .ka-root ::placeholder { color: var(--ka-dim); opacity: 1; }
-        .ka-focus:focus-visible { outline: 2px solid var(--ka-accent); outline-offset: 2px; border-radius: 4px; }
+        .ka-focus:focus-visible { outline: 2px solid var(--ka-focus); outline-offset: 2px; border-radius: 4px; }
         .ka-root button:focus-visible, .ka-root input:focus-visible, .ka-root a:focus-visible {
-          outline: 2px solid var(--ka-accent); outline-offset: 2px;
+          outline: 2px solid var(--ka-focus); outline-offset: 2px;
         }
         @keyframes ka-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
         @keyframes ka-spin { to { transform: rotate(360deg); } }
@@ -298,12 +316,15 @@ export default function Screen() {
             className="ka-rise rounded-lg border p-6 sm:p-8"
             style={{ backgroundColor: surface, borderColor: line, borderRadius: r }}
           >
-            <p
-              className="text-[11px] font-semibold uppercase tracking-[0.18em]"
-              style={{ color: brand.primaryColor }}
-            >
-              Knowledge Assistant
-            </p>
+            <div className="mb-2 flex items-center gap-2">
+              <BrandMark size={28} />
+              <p
+                className="text-[11px] font-semibold uppercase tracking-[0.18em]"
+                style={{ color: primaryText }}
+              >
+                Knowledge Assistant
+              </p>
+            </div>
             <h1
               className="mt-2 text-[26px] font-semibold leading-tight tracking-tight sm:text-[28px]"
               style={{ fontFamily: brand.fontHeading, color: textHi }}
@@ -320,8 +341,8 @@ export default function Screen() {
               <div
                 className="ka-rise mt-6 rounded-lg border p-4"
                 style={{
-                  borderColor: alpha(brand.accentColor, 0.5),
-                  backgroundColor: alpha(brand.accentColor, 0.09),
+                  borderColor: alpha(brand.errorColor, 0.5),
+                  backgroundColor: alpha(brand.errorColor, 0.09),
                   borderRadius: r,
                 }}
                 role="alert"
@@ -329,7 +350,7 @@ export default function Screen() {
                 <div className="flex gap-3">
                   <AlertCircle
                     className="mt-0.5 h-4 w-4 shrink-0"
-                    style={{ color: brand.accentColor }}
+                    style={{ color: brand.errorColor }}
                     aria-hidden="true"
                   />
                   <div>
@@ -366,14 +387,14 @@ export default function Screen() {
                 role="alert"
                 className="ka-rise mt-6 flex gap-3 rounded-lg border p-3.5"
                 style={{
-                  borderColor: alpha(brand.accentColor, 0.5),
-                  backgroundColor: alpha(brand.accentColor, 0.09),
+                  borderColor: alpha(brand.errorColor, 0.5),
+                  backgroundColor: alpha(brand.errorColor, 0.09),
                   borderRadius: r,
                 }}
               >
                 <AlertCircle
                   className="mt-0.5 h-4 w-4 shrink-0"
-                  style={{ color: brand.accentColor }}
+                  style={{ color: brand.errorColor }}
                   aria-hidden="true"
                 />
                 <div>
@@ -400,7 +421,7 @@ export default function Screen() {
               >
                 <Clock
                   className="h-4 w-4 shrink-0"
-                  style={{ color: brand.accentColor }}
+                  style={{ color: brand.warningColor }}
                   aria-hidden="true"
                 />
                 <p className="text-[12px] leading-relaxed" style={{ color: text }}>
@@ -421,14 +442,14 @@ export default function Screen() {
                 className="ka-rise mt-6 flex items-center gap-3 rounded-lg border p-3.5"
                 role="status"
                 style={{
-                  borderColor: alpha(brand.primaryColor, 0.5),
-                  backgroundColor: alpha(brand.primaryColor, 0.1),
+                  borderColor: alpha(brand.accentColor, 0.5),
+                  backgroundColor: alpha(brand.accentColor, 0.1),
                   borderRadius: r,
                 }}
               >
                 <CheckCircle
                   className="h-4 w-4 shrink-0"
-                  style={{ color: brand.primaryColor }}
+                  style={{ color: brand.accentColor }}
                   aria-hidden="true"
                 />
                 <p className="text-[12.5px]" style={{ color: textHi }}>
@@ -472,7 +493,7 @@ export default function Screen() {
                   <p
                     id="email-hint"
                     className="mt-1.5 text-[11.5px]"
-                    style={{ color: brand.accentColor }}
+                    style={{ color: brand.errorColor }}
                   >
                     {fieldErrors.email}
                   </p>
@@ -494,7 +515,7 @@ export default function Screen() {
                     aria-pressed={showPassword}
                     aria-controls="password"
                     className="ka-focus text-[11.5px] font-medium"
-                    style={{ color: brand.primaryColor }}
+                    style={{ color: primaryText }}
                   >
                     {showPassword ? "Hide" : "Show"}
                   </button>
@@ -525,7 +546,7 @@ export default function Screen() {
                   <p
                     id="password-hint"
                     className="mt-1.5 text-[11.5px]"
-                    style={{ color: brand.accentColor }}
+                    style={{ color: brand.errorColor }}
                   >
                     {fieldErrors.password}
                   </p>
@@ -563,7 +584,7 @@ export default function Screen() {
                     <p
                       id="confirm-hint"
                       className="mt-1.5 text-[11.5px]"
-                      style={{ color: brand.accentColor }}
+                      style={{ color: brand.errorColor }}
                     >
                       {fieldErrors.confirm}
                     </p>
@@ -676,16 +697,14 @@ export default function Screen() {
                   style={{ color: text }}
                 >
                   First install?{" "}
-                  <span style={{ color: brand.primaryColor }}>
-                    Create the administrator account
-                  </span>
+                  <span style={{ color: primaryText }}>Create the administrator account</span>
                 </button>
               ) : (
                 <button
                   type="button"
                   onClick={() => switchMode("signin")}
                   className="ka-focus flex items-center gap-1.5 text-left text-[12.5px]"
-                  style={{ color: brand.primaryColor }}
+                  style={{ color: primaryText }}
                 >
                   <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
                   Back to sign in
@@ -709,7 +728,7 @@ export default function Screen() {
               <div className="flex items-center gap-2.5">
                 <span
                   className="flex items-center gap-1.5 text-[11.5px]"
-                  style={{ color: snapshot.stale ? brand.accentColor : text }}
+                  style={{ color: snapshot.stale ? brand.warningColor : text }}
                 >
                   <span
                     className={snapshot.busy ? "ka-breathe" : ""}
@@ -718,7 +737,7 @@ export default function Screen() {
                       width: 6,
                       height: 6,
                       borderRadius: 999,
-                      backgroundColor: snapshot.stale ? brand.accentColor : brand.primaryColor,
+                      backgroundColor: snapshot.stale ? brand.warningColor : brand.accentColor,
                     }}
                     aria-hidden="true"
                   />
@@ -761,12 +780,7 @@ export default function Screen() {
                   <dd
                     className="mt-1.5 text-[22px] font-semibold leading-none"
                     style={{
-                      color:
-                        tile.tone === "good"
-                          ? brand.primaryColor
-                          : tile.tone === "watch"
-                            ? brand.accentColor
-                            : textHi,
+                      color: toneColor(tile.tone === "plain" ? "quiet" : tile.tone),
                       fontVariantNumeric: "tabular-nums",
                       fontFamily: brand.fontHeading,
                     }}
@@ -794,13 +808,19 @@ export default function Screen() {
                     {row.tone === "good" ? (
                       <CheckCircle
                         className="mt-0.5 h-3.5 w-3.5 shrink-0"
-                        style={{ color: brand.primaryColor }}
+                        style={{ color: brand.accentColor }}
                         aria-hidden="true"
                       />
                     ) : row.tone === "watch" ? (
                       <AlertCircle
                         className="mt-0.5 h-3.5 w-3.5 shrink-0"
-                        style={{ color: brand.accentColor }}
+                        style={{ color: brand.warningColor }}
+                        aria-hidden="true"
+                      />
+                    ) : row.tone === "bad" ? (
+                      <AlertCircle
+                        className="mt-0.5 h-3.5 w-3.5 shrink-0"
+                        style={{ color: brand.errorColor }}
                         aria-hidden="true"
                       />
                     ) : (
@@ -818,7 +838,7 @@ export default function Screen() {
                     </span>
                     <span
                       className="text-[12.5px] leading-snug"
-                      style={{ color: toneColor(row.tone) === textDim ? text : textHi }}
+                      style={{ color: row.tone === "quiet" ? text : textHi }}
                     >
                       {row.text}
                     </span>
@@ -856,7 +876,7 @@ export default function Screen() {
                 type="button"
                 onClick={() => navigate("docs")}
                 className="ka-focus inline-flex items-center gap-1.5"
-                style={{ color: brand.primaryColor }}
+                style={{ color: primaryText }}
               >
                 <FileText className="h-3.5 w-3.5" aria-hidden="true" />
                 Getting started
@@ -865,7 +885,7 @@ export default function Screen() {
                 type="button"
                 onClick={() => navigate("docs")}
                 className="ka-focus inline-flex items-center gap-1.5"
-                style={{ color: brand.primaryColor }}
+                style={{ color: primaryText }}
               >
                 <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
                 API reference

@@ -31,6 +31,8 @@ const ACCEPTED_EXTENSIONS = ["pdf", "docx", "txt", "md"];
 const ACCEPTED_LABEL = "PDF, DOCX, TXT and MD";
 const MAX_BYTES = 25 * 1024 * 1024;
 const POLL_INTERVAL_MS = 4000;
+const FOCUSABLE_SELECTOR =
+  'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
 type DocumentRow = {
   id: string;
@@ -109,6 +111,12 @@ export default function KnowledgeBase() {
   const [rowError, setRowError] = React.useState("");
   const [downloadingId, setDownloadingId] = React.useState<string | null>(null);
 
+  // US-039-2/AC-087: the control that opened the delete confirmation, so
+  // closing it (Cancel, Escape, or a successful delete) returns focus there
+  // rather than dropping it back to the document body.
+  const deleteTriggerRef = React.useRef<HTMLElement | null>(null);
+  const dialogRef = React.useRef<HTMLDivElement | null>(null);
+
   const hasActiveFilters = Boolean(query.trim() || statusFilter || typeFilter);
 
   const buildQuery = React.useCallback(() => {
@@ -165,6 +173,47 @@ export default function KnowledgeBase() {
     return () => window.clearInterval(interval);
   }, [documents, loadDocuments, loadStats]);
 
+  // US-039-2/AC-087: the delete confirmation is a true focus trap -- focus
+  // moves into it on open, Tab/Shift+Tab cannot leave it, Escape closes it
+  // exactly like Cancel, and closing (by any route) returns focus to the row
+  // control that opened it.
+  React.useEffect(() => {
+    if (!deleteTarget) return undefined;
+
+    const focusables = (): HTMLElement[] =>
+      dialogRef.current
+        ? Array.from(dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+        : [];
+
+    focusables()[0]?.focus();
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setDeleteTarget(null);
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusables();
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      deleteTriggerRef.current?.focus();
+    };
+  }, [deleteTarget]);
+
   const handleFiles = async (files: FileList | File[]) => {
     const file = Array.from(files)[0];
     if (!file) return;
@@ -216,6 +265,11 @@ export default function KnowledgeBase() {
     } catch {
       setRowError("Couldn't start that action. Try again.");
     }
+  };
+
+  const openDeleteConfirm = (doc: DocumentRow, trigger: HTMLElement) => {
+    deleteTriggerRef.current = trigger;
+    setDeleteTarget(doc);
   };
 
   const confirmDelete = async () => {
@@ -280,7 +334,7 @@ export default function KnowledgeBase() {
   const noDocumentsMatchFilters = documents.length === 0 && !noDocumentsAtAll;
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 p-4 sm:p-6">
       <div>
         <h1 className="text-lg font-semibold" style={{ fontFamily: "var(--brand-font-heading)" }}>
           {"Knowledge Base"}
@@ -452,17 +506,20 @@ export default function KnowledgeBase() {
               }
             />
           ) : (
+            // The Table component wraps this in its own `overflow-x-auto`
+            // container (US-039-1), so a narrow viewport scrolls the table
+            // within that box rather than the whole page (AC-088).
             <Table>
               <THead>
                 <TR>
-                  <TH>{"Filename"}</TH>
-                  <TH>{"Type"}</TH>
-                  <TH>{"Size"}</TH>
-                  <TH>{"Status"}</TH>
-                  <TH>{"Chunks"}</TH>
-                  <TH>{"Uploaded by"}</TH>
-                  <TH>{"Created"}</TH>
-                  <TH>{"Actions"}</TH>
+                  <TH scope="col">{"Filename"}</TH>
+                  <TH scope="col">{"Type"}</TH>
+                  <TH scope="col">{"Size"}</TH>
+                  <TH scope="col">{"Status"}</TH>
+                  <TH scope="col">{"Chunks"}</TH>
+                  <TH scope="col">{"Uploaded by"}</TH>
+                  <TH scope="col">{"Created"}</TH>
+                  <TH scope="col">{"Actions"}</TH>
                 </TR>
               </THead>
               <TBody>
@@ -529,7 +586,7 @@ export default function KnowledgeBase() {
                             type="button"
                             variant="danger"
                             size="sm"
-                            onClick={() => setDeleteTarget(doc)}
+                            onClick={(e) => openDeleteConfirm(doc, e.currentTarget)}
                           >
                             <Trash size={14} /> {"Delete"}
                           </Button>
@@ -550,6 +607,7 @@ export default function KnowledgeBase() {
           role="dialog"
           aria-modal="true"
           aria-labelledby="delete-doc-title"
+          ref={dialogRef}
         >
           <Card className="w-full max-w-md">
             <CardHeader>

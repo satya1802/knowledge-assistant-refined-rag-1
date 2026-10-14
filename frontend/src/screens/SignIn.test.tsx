@@ -115,4 +115,39 @@ describe("SignIn", () => {
     expect(createCall).toBeTruthy();
     expect(createCall![1].method).toBe("POST");
   });
+
+  // AC-157: the BrandMark rendered here is driven only by lib/brand.ts.
+  it("renders the shared BrandMark component from lib/brand.ts tokens", () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({}) }),
+    );
+    renderSignIn();
+    expect(screen.getAllByTestId("brand-mark").length).toBeGreaterThan(0);
+  });
+
+  // AC-087: the email field, the password visibility toggle and the
+  // password field are reachable by Tab in the order they appear in the
+  // DOM, and each is a native, keyboard-operable control.
+  it("the email field, password toggle and password field are reachable by Tab in DOM order", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: false, status: 401, json: async () => ({}) }),
+    );
+    renderSignIn();
+
+    const email = screen.getByLabelText(/work email/i);
+    const showToggle = screen.getByRole("button", { name: /^show$/i });
+    const password = screen.getByLabelText(/^password$/i);
+
+    await user.tab();
+    expect(email).toHaveFocus();
+
+    await user.tab();
+    expect(showToggle).toHaveFocus();
+
+    await user.tab();
+    expect(password).toHaveFocus();
+  });
 });

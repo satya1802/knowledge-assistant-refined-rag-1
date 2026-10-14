@@ -445,6 +445,91 @@ describe("KnowledgeBase screen", () => {
     expect(deleteCall).toBeFalsy();
   });
 
+  describe("delete confirmation keyboard behaviour (US-039-2/AC-087)", () => {
+    it("Escape closes the delete confirmation without issuing a DELETE request", async () => {
+      const { fetchMock } = makeFetch({
+        role: "admin",
+        documents: [doc({ id: "keep-2", filename: "keep-esc.pdf", status: "ready" })],
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      renderKB();
+
+      const row = await screen.findByRole("row", { name: /keep-esc\.pdf/i });
+      const user = userEvent.setup();
+      const deleteButton = within(row).getByRole("button", { name: /delete/i });
+      await user.click(deleteButton);
+
+      await screen.findByRole("dialog");
+      await user.keyboard("{Escape}");
+
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      const deleteCall = findCall(fetchMock, (_url, init) => init?.method === "DELETE");
+      expect(deleteCall).toBeFalsy();
+      // Focus returns to the row control that opened the dialog.
+      expect(deleteButton).toHaveFocus();
+    });
+
+    it("opening the dialog moves focus into it and Tab cannot escape it (focus trap)", async () => {
+      const { fetchMock } = makeFetch({
+        role: "admin",
+        documents: [doc({ id: "trap-1", filename: "trap.pdf", status: "ready" })],
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      renderKB();
+
+      const row = await screen.findByRole("row", { name: /trap\.pdf/i });
+      const user = userEvent.setup();
+      await user.click(within(row).getByRole("button", { name: /delete/i }));
+
+      const dialog = await screen.findByRole("dialog");
+      const cancelButton = within(dialog).getByRole("button", { name: /cancel/i });
+      const deleteConfirmButton = within(dialog).getByRole("button", { name: /^delete$/i });
+
+      expect(cancelButton).toHaveFocus();
+
+      deleteConfirmButton.focus();
+      await user.tab();
+      expect(cancelButton).toHaveFocus();
+
+      await user.tab({ shift: true });
+      expect(deleteConfirmButton).toHaveFocus();
+    });
+
+    it("Cancel also returns focus to the row's delete control", async () => {
+      const { fetchMock } = makeFetch({
+        role: "admin",
+        documents: [doc({ id: "keep-3", filename: "keep-cancel.pdf", status: "ready" })],
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      renderKB();
+
+      const row = await screen.findByRole("row", { name: /keep-cancel\.pdf/i });
+      const user = userEvent.setup();
+      const deleteButton = within(row).getByRole("button", { name: /delete/i });
+      await user.click(deleteButton);
+
+      const dialog = await screen.findByRole("dialog");
+      await user.click(within(dialog).getByRole("button", { name: /cancel/i }));
+
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+      expect(deleteButton).toHaveFocus();
+    });
+  });
+
+  it("the document table declares column header semantics for every column", async () => {
+    const { fetchMock } = makeFetch({
+      role: "admin",
+      documents: [doc({ filename: "headers.pdf" })],
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderKB();
+
+    await screen.findByText("headers.pdf");
+    const headers = screen.getAllByRole("columnheader");
+    expect(headers.length).toBeGreaterThanOrEqual(8);
+    headers.forEach((header) => expect(header).toHaveAttribute("scope", "col"));
+  });
+
   describe("download (AC-027)", () => {
     let originalCreateObjectURL: typeof URL.createObjectURL;
     let originalRevokeObjectURL: typeof URL.revokeObjectURL;

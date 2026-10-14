@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Placeholder favicon (AC-157). Mirrors frontend/src/lib/brand.ts's
+     primaryColor (#344794 navy), accentColor (#45A56D green) and
+     onPrimaryColor (#FFFFFF). Replacing this file alone swaps the tab icon;
+     keep it in sync with brand.ts if those values change. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="8" fill="#344794" />
+  <circle cx="20.5" cy="20.5" r="7" fill="#45A56D" />
+  <circle cx="11.5" cy="11.5" r="4" fill="#FFFFFF" fill-opacity="0.92" />
+</svg>

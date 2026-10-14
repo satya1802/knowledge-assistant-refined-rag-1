@@ -6,7 +6,11 @@ import { Icons } from "@/lib/icons";
 import SourcePanel, { type SourcePanelCitation } from "./SourcePanel";
 
 const { Button, Textarea, Input, Card, CardContent, Badge, Empty } = UI;
-const { Plus, ArrowRight, AlertCircle, FileText, CheckCircle, Trash, X } = Icons;
+const { Plus, ArrowRight, AlertCircle, FileText, CheckCircle, Trash, X, Menu } = Icons;
+
+function cx(...parts: Array<string | false | null | undefined>): string {
+  return parts.filter(Boolean).join(" ");
+}
 
 type Citation = {
   number: number;
@@ -209,6 +213,22 @@ function DeleteConfirmRow({
   );
 }
 
+// AC-157: the assistant's turns carry a small brand-coloured mark so the
+// thread reads at a glance as "assistant said this" -- driven entirely by
+// the shared `--brand-primary` token, never a hardcoded hex, so it repaints
+// with the rest of the UI under a brand or theme change.
+function AssistantMark() {
+  return (
+    <span
+      aria-hidden="true"
+      className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+      style={{ backgroundColor: "var(--brand-primary)" }}
+    >
+      {"AI"}
+    </span>
+  );
+}
+
 export default function Chat() {
   const [conversations, setConversations] = React.useState<ConversationSummary[]>([]);
   const [listState, setListState] = React.useState<ListState>("loading");
@@ -228,6 +248,12 @@ export default function Chat() {
   const sendingRef = React.useRef(false);
 
   const [deleteState, setDeleteState] = React.useState<DeleteState | null>(null);
+
+  // US-039-2/AC-088: the conversation sidebar collapses to a keyboard-operable
+  // drawer below the `md` breakpoint. On wider screens it is forced visible
+  // by CSS (`md:translate-x-0`) regardless of this flag, so this state only
+  // ever matters on a narrow viewport.
+  const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
   // US-023-1: which citation's source panel is open, if any, and the chip
   // that opened it -- so closing the panel returns focus to exactly where
@@ -285,6 +311,10 @@ export default function Chat() {
   const openConversation = React.useCallback(async (id: string) => {
     setConversationId(id);
     setDetailState("loading");
+    // On a narrow viewport the sidebar is a drawer; selecting a conversation
+    // closes it so the thread is immediately visible. Harmless on wider
+    // viewports, where the sidebar is always shown regardless of this flag.
+    setSidebarOpen(false);
     try {
       // AC-072/AC-067/AC-070: the full turn history is re-fetched from the
       // backend every time a conversation is selected (including after a
@@ -313,6 +343,7 @@ export default function Chat() {
     setMessages([]);
     setDetailState("idle");
     setInput("");
+    setSidebarOpen(false);
   }, []);
 
   const requestDelete = (id: string) => {
@@ -421,10 +452,24 @@ export default function Chat() {
   };
 
   return (
-    <div className="flex h-full min-h-screen">
+    <div className="relative flex h-full min-h-screen overflow-hidden">
+      {sidebarOpen ? (
+        <button
+          type="button"
+          aria-label="Close conversation list"
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 z-30 bg-black/40 md:hidden"
+        />
+      ) : null}
+
       <aside
-        className="flex w-64 shrink-0 flex-col gap-3 border-r p-4"
-        style={{ borderColor: "var(--brand-border)" }}
+        id="chat-sidebar"
+        className={cx(
+          "fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col gap-3 overflow-y-auto border-r p-4",
+          "transition-transform duration-200 ease-out md:static md:z-auto md:translate-x-0",
+          sidebarOpen ? "translate-x-0" : "-translate-x-full",
+        )}
+        style={{ borderColor: "var(--brand-border)", backgroundColor: "var(--brand-surface)" }}
       >
         <Button type="button" variant="secondary" size="sm" onClick={startNewConversation}>
           <Plus size={14} /> {"New conversation"}
@@ -451,7 +496,7 @@ export default function Chat() {
                 type="button"
                 aria-label="Clear search"
                 onClick={handleClearSearch}
-                className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center justify-center text-[var(--brand-fg-muted)] hover:text-inherit"
+                className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center justify-center text-[var(--brand-fg-muted)] hover:text-inherit focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)]"
               >
                 <X size={14} />
               </button>
@@ -524,7 +569,7 @@ export default function Chat() {
                         <button
                           type="button"
                           onClick={() => void openConversation(conversation.id)}
-                          className="flex-1 truncate rounded-[var(--brand-radius)] px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--brand-hover)]"
+                          className="flex-1 truncate rounded-[var(--brand-radius)] px-3 py-2 text-left text-sm transition-colors hover:bg-[var(--brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)]"
                         >
                           {title}
                         </button>
@@ -557,17 +602,33 @@ export default function Chat() {
         )}
       </aside>
 
-      <section className="flex flex-1 flex-col gap-4 p-6">
-        <div>
-          <h1 className="text-lg font-semibold" style={{ fontFamily: "var(--brand-font-heading)" }}>
-            {"Chat"}
-          </h1>
-          <p className="text-sm text-[var(--brand-fg-muted)]">
-            {"Ask a question about the knowledge base."}
-          </p>
+      <section className="flex min-w-0 flex-1 flex-col gap-4 p-4 sm:p-6">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h1
+              className="text-lg font-semibold"
+              style={{ fontFamily: "var(--brand-font-heading)" }}
+            >
+              {"Chat"}
+            </h1>
+            <p className="text-sm text-[var(--brand-fg-muted)]">
+              {"Ask a question about the knowledge base."}
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            className="shrink-0 md:hidden"
+            aria-expanded={sidebarOpen}
+            aria-controls="chat-sidebar"
+            onClick={() => setSidebarOpen((open) => !open)}
+          >
+            <Menu size={14} /> {"Conversations"}
+          </Button>
         </div>
 
-        <Card className="flex flex-1 flex-col">
+        <Card className="flex flex-1 flex-col overflow-hidden">
           <CardContent className="flex flex-1 flex-col gap-4 overflow-y-auto">
             {detailState === "loading" ? (
               <p className="text-sm text-[var(--brand-fg-muted)]">{"Loading conversation…"}</p>
@@ -599,60 +660,66 @@ export default function Chat() {
                 return (
                   <div
                     key={message.id}
-                    className="flex flex-col gap-1"
-                    style={{ alignItems: message.role === "user" ? "flex-end" : "flex-start" }}
+                    className="flex items-start gap-2"
+                    style={{ flexDirection: message.role === "user" ? "row-reverse" : "row" }}
                   >
+                    {isAssistant ? <AssistantMark /> : null}
                     <div
-                      role={message.isError ? "alert" : undefined}
-                      className="max-w-xl rounded-[var(--brand-radius)] px-3 py-2 text-sm"
-                      style={{
-                        backgroundColor: message.isError
-                          ? "rgba(248, 113, 113, 0.12)"
-                          : message.role === "user"
-                            ? "var(--brand-hover)"
-                            : "var(--brand-surface)",
-                        color: message.isError ? "#f87171" : "inherit",
-                        border: "1px solid var(--brand-border)",
-                      }}
+                      className="flex min-w-0 flex-1 flex-col gap-1"
+                      style={{ alignItems: message.role === "user" ? "flex-end" : "flex-start" }}
                     >
-                      {message.isError ? (
-                        <span className="flex items-center gap-1">
-                          <AlertCircle size={14} /> {message.content}
-                        </span>
-                      ) : (
-                        message.content
-                      )}
-                    </div>
-                    {isAssistant ? (
-                      message.fromDocuments ? (
-                        <Badge variant="success" className="flex items-center gap-1">
-                          <CheckCircle size={10} /> {"From your documents"}
-                        </Badge>
-                      ) : (
-                        <Badge variant="warning" className="flex items-center gap-1">
-                          <AlertCircle size={10} /> {"Not from your documents"}
-                        </Badge>
-                      )
-                    ) : null}
-                    {groundedChips.length > 0 ? (
-                      <div role="group" aria-label="Sources" className="flex flex-wrap gap-1">
-                        {groundedChips.map((citation) => (
-                          <button
-                            key={citation.chunk_id}
-                            type="button"
-                            onClick={(e) => handleSelectCitation(citation, e.currentTarget)}
-                            aria-label={`Source ${citation.number}: ${
-                              citation.filename ?? "Untitled document"
-                            }`}
-                            className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-colors hover:bg-[var(--brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)]"
-                            style={{ borderColor: "var(--brand-border)" }}
-                          >
-                            <FileText size={10} />
-                            {citation.number}. {citation.filename ?? `Source ${citation.number}`}
-                          </button>
-                        ))}
+                      <div
+                        role={message.isError ? "alert" : undefined}
+                        className="max-w-full rounded-[var(--brand-radius)] px-3 py-2 text-sm sm:max-w-xl"
+                        style={{
+                          backgroundColor: message.isError
+                            ? "rgba(248, 113, 113, 0.12)"
+                            : message.role === "user"
+                              ? "var(--brand-hover)"
+                              : "var(--brand-surface)",
+                          color: message.isError ? "#f87171" : "inherit",
+                          border: "1px solid var(--brand-border)",
+                        }}
+                      >
+                        {message.isError ? (
+                          <span className="flex items-center gap-1">
+                            <AlertCircle size={14} /> {message.content}
+                          </span>
+                        ) : (
+                          message.content
+                        )}
                       </div>
-                    ) : null}
+                      {isAssistant ? (
+                        message.fromDocuments ? (
+                          <Badge variant="success" className="flex items-center gap-1">
+                            <CheckCircle size={10} /> {"From your documents"}
+                          </Badge>
+                        ) : (
+                          <Badge variant="warning" className="flex items-center gap-1">
+                            <AlertCircle size={10} /> {"Not from your documents"}
+                          </Badge>
+                        )
+                      ) : null}
+                      {groundedChips.length > 0 ? (
+                        <div role="group" aria-label="Sources" className="flex flex-wrap gap-1">
+                          {groundedChips.map((citation) => (
+                            <button
+                              key={citation.chunk_id}
+                              type="button"
+                              onClick={(e) => handleSelectCitation(citation, e.currentTarget)}
+                              aria-label={`Source ${citation.number}: ${
+                                citation.filename ?? "Untitled document"
+                              }`}
+                              className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-colors hover:bg-[var(--brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)]"
+                              style={{ borderColor: "var(--brand-border)" }}
+                            >
+                              <FileText size={10} />
+                              {citation.number}. {citation.filename ?? `Source ${citation.number}`}
+                            </button>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 );
               })
@@ -660,7 +727,10 @@ export default function Chat() {
           </CardContent>
         </Card>
 
-        <form onSubmit={(e) => void handleSend(e)} className="flex items-end gap-2">
+        <form
+          onSubmit={(e) => void handleSend(e)}
+          className="flex flex-col gap-2 sm:flex-row sm:items-end"
+        >
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -674,7 +744,7 @@ export default function Chat() {
             className="flex-1"
             disabled={sending}
           />
-          <Button type="submit" disabled={sending || !input.trim()}>
+          <Button type="submit" disabled={sending || !input.trim()} className="sm:w-auto">
             {sending ? (
               "Sending…"
             ) : (
