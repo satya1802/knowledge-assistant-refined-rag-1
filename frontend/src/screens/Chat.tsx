@@ -3,6 +3,7 @@ import * as React from "react";
 import { apiFetch, ApiError } from "@/lib/api";
 import * as UI from "@/lib/ui";
 import { Icons } from "@/lib/icons";
+import SourcePanel, { type SourcePanelCitation } from "./SourcePanel";
 
 const { Button, Textarea, Card, CardContent, Badge, Empty } = UI;
 const { Plus, ArrowRight, AlertCircle, FileText, CheckCircle } = Icons;
@@ -86,6 +87,14 @@ export default function Chat() {
   const [sending, setSending] = React.useState(false);
   const sendingRef = React.useRef(false);
 
+  // US-023-1: which citation's source panel is open, if any, and the chip
+  // that opened it -- so closing the panel returns focus to exactly where
+  // the user's keyboard was (AC-057).
+  const [selectedCitation, setSelectedCitation] = React.useState<SourcePanelCitation | null>(
+    null,
+  );
+  const selectedChipRef = React.useRef<HTMLButtonElement | null>(null);
+
   const loadConversations = React.useCallback(async () => {
     setListState((prev) => (prev === "loaded" ? prev : "loading"));
     try {
@@ -132,10 +141,22 @@ export default function Chat() {
     setInput("");
   };
 
-  // Hook point for US-023-1's source panel. Selecting a chip does nothing
-  // observable yet -- opening the panel is that ticket's work, not this one's.
-  const handleSelectCitation = React.useCallback((citation: Citation) => {
-    void citation;
+  // AC-055/AC-057: clicking or keyboard-activating a chip opens the side
+  // panel for that citation; selecting a different chip while the panel is
+  // already open just swaps which citation it shows -- the conversation
+  // thread, scroll position and composer input are untouched either way,
+  // since this only ever updates local selection state.
+  const handleSelectCitation = React.useCallback(
+    (citation: Citation, chip: HTMLButtonElement) => {
+      selectedChipRef.current = chip;
+      setSelectedCitation(citation);
+    },
+    [],
+  );
+
+  const closeSourcePanel = React.useCallback(() => {
+    setSelectedCitation(null);
+    selectedChipRef.current?.focus();
   }, []);
 
   const handleSend = async (event?: React.FormEvent) => {
@@ -329,7 +350,9 @@ export default function Chat() {
                           <button
                             key={citation.chunk_id}
                             type="button"
-                            onClick={() => handleSelectCitation(citation)}
+                            onClick={(e) =>
+                              handleSelectCitation(citation, e.currentTarget)
+                            }
                             aria-label={`Source ${citation.number}: ${
                               citation.filename ?? "Untitled document"
                             }`}
@@ -374,6 +397,8 @@ export default function Chat() {
           </Button>
         </form>
       </section>
+
+      <SourcePanel citation={selectedCitation} onClose={closeSourcePanel} />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import Chat from "./Chat";
 
@@ -27,6 +27,8 @@ type FetchOpts = {
     question: string;
   }) => Promise<unknown> | unknown;
   chatShouldFail?: boolean;
+  downloadHeaders?: Record<string, string>;
+  downloadOk?: boolean;
 };
 
 function makeFetch(opts: FetchOpts = {}) {
@@ -37,7 +39,8 @@ function makeFetch(opts: FetchOpts = {}) {
     const u = new URL(url, "http://localhost");
     const path = u.pathname;
     const method = (init?.method ?? "GET").toUpperCase();
-    const body = init?.body ? JSON.parse(init.body as string) : undefined;
+    const isJsonBody = typeof init?.body === "string";
+    const body = isJsonBody ? JSON.parse(init!.body as string) : undefined;
     calls.push({ path, method, body });
 
     if (path === "/conversations" && method === "GET") {
@@ -76,6 +79,25 @@ function makeFetch(opts: FetchOpts = {}) {
         ],
       });
     }
+    if (/^\/documents\/[^/]+\/download$/.test(path) && method === "GET") {
+      if (opts.downloadOk === false) {
+        return Promise.resolve({
+          ok: false,
+          status: 500,
+          json: async () => ({}),
+          clone() {
+            return this;
+          },
+        });
+      }
+      const headers = new Headers(opts.downloadHeaders ?? {});
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        headers,
+        blob: async () => new Blob(["file-bytes"], { type: "application/octet-stream" }),
+      });
+    }
     return Promise.reject(new Error(`unexpected ${method} ${path}`));
   });
 
@@ -89,6 +111,29 @@ function countChatPosts(fetchMock: ReturnType<typeof vi.fn>): number {
     const method = (init?.method ?? "GET").toUpperCase();
     return path === "/chat" && method === "POST";
   }).length;
+}
+
+function findCall(
+  fetchMock: ReturnType<typeof vi.fn>,
+  predicate: (url: string, init: RequestInit | undefined) => boolean,
+) {
+  return fetchMock.mock.calls.find((call: unknown[]) =>
+    predicate(call[0] as string, call[1] as RequestInit | undefined),
+  );
+}
+
+async function renderWithGroundedAnswer(chatResponder: FetchOpts["chatResponder"]) {
+  const { fetchMock } = makeFetch({ conversations: [], chatResponder });
+  vi.stubGlobal("fetch", fetchMock);
+  const user = userEvent.setup();
+  render(<Chat />);
+
+  await waitFor(() => expect(screen.getByText("No messages yet")).toBeInTheDocument());
+  await user.type(screen.getByPlaceholderText("Ask a question…"), "Grounded?");
+  await user.click(screen.getByRole("button", { name: /send/i }));
+  await screen.findByText(/grounded answer/i, { exact: false }).catch(() => undefined);
+
+  return { fetchMock, user };
 }
 
 describe("Chat screen", () => {
@@ -119,7 +164,13 @@ describe("Chat screen", () => {
           title: "Prior chat",
           messages: [
             { id: "m1", role: "user", content: "What is the policy?" },
-            { id: "m2", role: "assistant", content: "It is this.", from_documents: false, citations: [] },
+            {
+              id: "m2",
+              role: "assistant",
+              content: "It is this.",
+              from_documents: false,
+              citations: [],
+            },
           ],
         },
       },
@@ -400,5 +451,178 @@ describe("Chat screen", () => {
     await screen.findByText("Final answer");
 
     expect(countChatPosts(fetchMock)).toBe(1);
+  });
+
+  describe("source panel (US-023-1)", () => {
+    const twoCitationResponder = (body: { conversation_id?: string; question: string }) => ({
+      conversation_id: body.conversation_id,
+      answer: "Grounded answer [1][2].",
+      from_documents: true,
+      citations: [
+        {
+          number: 1,
+          document_id: "doc-1",
+          chunk_id: "chunk-1",
+          filename: "alpha.txt",
+          page_ref: 3,
+          text_preview: "Alpha chunk text.",
+          score: 0.9,
+        },
+        {
+          number: 2,
+          document_id: "doc-2",
+          chunk_id: "chunk-2",
+          filename: "beta.md",
+          section_ref: "Section 2",
+          text_preview: "Beta chunk text.",
+          score: 0.85,
+        },
+      ],
+    });
+
+    let originalCreateObjectURL: typeof URL.createObjectURL;
+    let originalRevokeObjectURL: typeof URL.revokeObjectURL;
+
+    beforeEach(() => {
+      originalCreateObjectURL = URL.createObjectURL;
+      originalRevokeObjectURL = URL.revokeObjectURL;
+      URL.createObjectURL = vi.fn().mockReturnValue("blob:fake-url");
+      URL.revokeObjectURL = vi.fn();
+    });
+
+    afterEach(() => {
+      URL.createObjectURL = originalCreateObjectURL;
+      URL.revokeObjectURL = originalRevokeObjectURL;
+    });
+
+    it("AC-055: clicking a chip opens the panel with filename, location and preview text", async () => {
+      const { user } = await renderWithGroundedAnswer(twoCitationResponder);
+
+      const chip1 = screen.getByRole("button", { name: /source 1: alpha\.txt/i });
+      await user.click(chip1);
+
+      const panel = await screen.findByRole("dialog");
+      expect(within(panel).getByText("alpha.txt")).toBeInTheDocument();
+      expect(within(panel).getByText("Page 3")).toBeInTheDocument();
+      expect(within(panel).getByText("Alpha chunk text.")).toBeInTheDocument();
+    });
+
+    it("AC-055: keyboard-activating a chip (Enter) also opens the panel", async () => {
+      const { user } = await renderWithGroundedAnswer(twoCitationResponder);
+
+      const chip1 = screen.getByRole("button", { name: /source 1: alpha\.txt/i });
+      chip1.focus();
+      await user.keyboard("{Enter}");
+
+      const panel = await screen.findByRole("dialog");
+      expect(within(panel).getByText("alpha.txt")).toBeInTheDocument();
+    });
+
+    it("AC-057: selecting a different chip updates the panel without touching the thread or composer", async () => {
+      const { user } = await renderWithGroundedAnswer(twoCitationResponder);
+
+      await user.type(screen.getByPlaceholderText("Ask a question…"), "draft reply");
+      await user.click(screen.getByRole("button", { name: /source 1: alpha\.txt/i }));
+      let panel = await screen.findByRole("dialog");
+      expect(within(panel).getByText("alpha.txt")).toBeInTheDocument();
+
+      await user.click(screen.getByRole("button", { name: /source 2: beta\.md/i }));
+      panel = screen.getByRole("dialog");
+      expect(within(panel).getByText("beta.md")).toBeInTheDocument();
+      expect(within(panel).getByText("Section: Section 2")).toBeInTheDocument();
+      expect(within(panel).queryByText("alpha.txt")).not.toBeInTheDocument();
+
+      // Thread and composer are untouched by the switch.
+      expect(screen.getByText("Grounded answer [1][2].")).toBeInTheDocument();
+      expect(screen.getByPlaceholderText("Ask a question…")).toHaveValue("draft reply");
+    });
+
+    it("AC-057/close-button: closing the panel removes it and returns focus to the originating chip", async () => {
+      const { user } = await renderWithGroundedAnswer(twoCitationResponder);
+
+      const chip1 = screen.getByRole("button", { name: /source 1: alpha\.txt/i });
+      await user.click(chip1);
+      await screen.findByRole("dialog");
+
+      await user.click(screen.getByRole("button", { name: /close source panel/i }));
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(chip1).toHaveFocus();
+    });
+
+    it("closing via Escape dismisses the panel and returns focus to the chip", async () => {
+      const { user } = await renderWithGroundedAnswer(twoCitationResponder);
+
+      const chip2 = screen.getByRole("button", { name: /source 2: beta\.md/i });
+      await user.click(chip2);
+      await screen.findByRole("dialog");
+
+      await user.keyboard("{Escape}");
+
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(chip2).toHaveFocus();
+    });
+
+    it("AC-056: the download button fetches /documents/{document_id}/download and saves under its filename", async () => {
+      const { fetchMock, user } = await renderWithGroundedAnswer(twoCitationResponder);
+      fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+        const u = new URL(url, "http://localhost");
+        const path = u.pathname;
+        const method = (init?.method ?? "GET").toUpperCase();
+        if (/^\/documents\/[^/]+\/download$/.test(path) && method === "GET") {
+          const headers = new Headers({ "Content-Disposition": 'attachment; filename="alpha.txt"' });
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            headers,
+            blob: async () => new Blob(["bytes"], { type: "text/plain" }),
+          });
+        }
+        return Promise.reject(new Error(`unexpected ${method} ${path}`));
+      });
+
+      await user.click(screen.getByRole("button", { name: /source 1: alpha\.txt/i }));
+      await screen.findByRole("dialog");
+
+      let downloadAttr = "";
+      const clickSpy = vi
+        .spyOn(HTMLAnchorElement.prototype, "click")
+        .mockImplementation(function (this: HTMLAnchorElement) {
+          downloadAttr = this.download;
+        });
+
+      await user.click(screen.getByRole("button", { name: /download original/i }));
+
+      await waitFor(() => expect(clickSpy).toHaveBeenCalled());
+      expect(downloadAttr).toBe("alpha.txt");
+      const downloadCall = findCall(fetchMock, (url) => url.endsWith("/documents/doc-1/download"));
+      expect(downloadCall).toBeTruthy();
+
+      clickSpy.mockRestore();
+    });
+
+    it("the download button shows a readable error on failure instead of a silent no-op", async () => {
+      const { user } = await renderWithGroundedAnswer(twoCitationResponder);
+
+      await user.click(screen.getByRole("button", { name: /source 1: alpha\.txt/i }));
+      const panel = await screen.findByRole("dialog");
+
+      // Reconfigure the mock so the download route rejects.
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockImplementation((url: string) => {
+          if (String(url).includes("/download")) {
+            return Promise.resolve({ ok: false, status: 500, json: async () => ({}) });
+          }
+          return Promise.reject(new Error("unexpected"));
+        }),
+      );
+
+      await user.click(within(panel).getByRole("button", { name: /download original/i }));
+
+      await waitFor(() =>
+        expect(screen.getByText(/couldn't download that document/i)).toBeInTheDocument(),
+      );
+    });
   });
 });
