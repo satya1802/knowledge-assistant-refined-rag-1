@@ -84,7 +84,10 @@ export async function apiFetchBlob(
     headers: { ...(init?.headers ?? {}) },
   });
   if (!response.ok) {
-    throw new ApiError(response.status, `${init?.method ?? "GET"} ${path} failed: ${response.status}`);
+    throw new ApiError(
+      response.status,
+      `${init?.method ?? "GET"} ${path} failed: ${response.status}`,
+    );
   }
   const blob = await response.blob();
   const filename = parseContentDispositionFilename(response.headers.get("Content-Disposition"));

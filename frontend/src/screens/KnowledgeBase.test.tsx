@@ -263,9 +263,7 @@ describe("KnowledgeBase screen", () => {
     const user = userEvent.setup();
     await user.click(within(row).getByRole("button", { name: /re-?index/i }));
 
-    await waitFor(() =>
-      expect(reprocessCalls).toContainEqual({ id: "d-ready", mode: "reindex" }),
-    );
+    await waitFor(() => expect(reprocessCalls).toContainEqual({ id: "d-ready", mode: "reindex" }));
   });
 
   it("shows the administrator-upload empty state when there are no documents at all, for an admin (AC-153)", async () => {
@@ -473,11 +471,11 @@ describe("KnowledgeBase screen", () => {
       URL.createObjectURL = createObjectURL;
       URL.revokeObjectURL = revokeObjectURL;
       let downloadAttr = "";
-      const clickSpy = vi
-        .spyOn(HTMLAnchorElement.prototype, "click")
-        .mockImplementation(function (this: HTMLAnchorElement) {
-          downloadAttr = this.download;
-        });
+      const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+        this: HTMLAnchorElement,
+      ) {
+        downloadAttr = this.download;
+      });
 
       renderKB();
       const row = await screen.findByRole("row", { name: /row-name\.pdf/i });
@@ -503,11 +501,11 @@ describe("KnowledgeBase screen", () => {
       URL.createObjectURL = vi.fn().mockReturnValue("blob:fake-url");
       URL.revokeObjectURL = vi.fn();
       let downloadAttr = "";
-      const clickSpy = vi
-        .spyOn(HTMLAnchorElement.prototype, "click")
-        .mockImplementation(function (this: HTMLAnchorElement) {
-          downloadAttr = this.download;
-        });
+      const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+        this: HTMLAnchorElement,
+      ) {
+        downloadAttr = this.download;
+      });
 
       renderKB();
       const row = await screen.findByRole("row", { name: /row-fallback\.pdf/i });
