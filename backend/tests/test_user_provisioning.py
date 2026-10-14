@@ -149,12 +149,12 @@ def test_granting_admin_passes_get_users_on_the_very_next_request() -> None:
     assert target_client.get("/users").status_code == 200
 
 
-def test_granting_admin_then_admin_only_document_actions_are_not_enforced_by_the_backend() -> None:
-    """Documents that AC-013's second half ("...and the admin-only document
-    actions") has nothing to verify against: app/routers/documents.py wires
-    every document route with no `current_user`/`require_admin` dependency
-    at all, so there is no admin-only document behaviour yet to pass or
-    fail. This is recorded as a defect, not silently skipped."""
+def test_granting_admin_then_admin_only_document_actions_are_enforced_by_the_backend() -> None:
+    """AC-013's second half: `app/routers/documents.py` gates every document
+    route behind `current_user`/`require_admin` (see
+    `app/deps.py`), so an unauthenticated caller is rejected the same way
+    an unauthenticated caller is rejected everywhere else -- 401, not the
+    200 a missing guard would have returned."""
     admin_email = _unique_email("ac013-docs-admin")
     _seed_user(admin_email, role="admin")
     target_email = _unique_email("ac013-docs-target")
@@ -165,14 +165,8 @@ def test_granting_admin_then_admin_only_document_actions_are_not_enforced_by_the
     admin_client.patch(f"/users/{target.id}", json={"role": "admin"})
 
     anon_client = _fresh_client()  # deliberately unauthenticated
-    # If document routes were admin-gated, this would be 401. It is not --
-    # every document route accepts anonymous callers today.
     response = anon_client.post("/documents/some-id/reprocess", json={"mode": "retry"})
-    assert response.status_code == 200, (
-        "Expected the current (ungated) behaviour; if this starts failing, "
-        "document routes have gained auth and this test -- and the AC-013 "
-        "defect note above -- should be revisited rather than deleted."
-    )
+    assert response.status_code == 401
 
 
 # --------------------------------------------------------------------- #

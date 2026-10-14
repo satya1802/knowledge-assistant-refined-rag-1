@@ -22,7 +22,8 @@ from fastapi.testclient import TestClient
 import app.routers.documents as documents_router
 import app.worker as worker_module
 from app.database import Base, SessionLocal, engine
-from app.embedding import EmbeddingProviderError, index_document as _real_index_document
+from app.embedding import EmbeddingProviderError
+from app.embedding import index_document as _real_index_document
 from app.main import app
 from app.models import Chunk, Document, User
 from app.security import hash_password
@@ -113,9 +114,7 @@ def _document_row(document_id):
 
 def _chunk_ids(document_id) -> set:
     with SessionLocal() as db:
-        return {
-            row.id for row in db.query(Chunk.id).filter(Chunk.document_id == document_id).all()
-        }
+        return {row.id for row in db.query(Chunk.id).filter(Chunk.document_id == document_id).all()}
 
 
 # --------------------------------------------------------------------- #
@@ -129,17 +128,23 @@ def test_retry_on_a_failed_document_reruns_the_pipeline_from_the_stored_file(mon
     _patch_index_document(monkeypatch, _FakeEmbeddingProvider())
     client = _admin_client()
     created = client.post(
-        "/documents", files={"file": ("retry-me.txt", b"some real recoverable body text", "text/plain")}
+        "/documents",
+        files={"file": ("retry-me.txt", b"some real recoverable body text", "text/plain")},
     ).json()
     doc_id = uuid.UUID(created["id"])
 
     # Simulate a prior failed attempt: a stale chunk and a failure_reason,
     # with status 'failed' -- exactly what a real failed run would leave.
+    # The upload above already ran the pipeline to completion (the
+    # autouse fixture makes `enqueue_processing` synchronous), so its own
+    # chunk generation is cleared first -- a real failed attempt leaves
+    # only its own chunks behind, not an earlier successful generation's.
     with SessionLocal() as db:
         document = db.query(Document).filter(Document.id == doc_id).one()
         document.status = "failed"
         document.failure_reason = "a previous attempt's failure reason"
         db.add(document)
+        db.query(Chunk).filter(Chunk.document_id == doc_id).delete()
         stale_chunk = Chunk(document_id=doc_id, chunk_index=0, content="stale leftover content")
         db.add(stale_chunk)
         db.commit()
@@ -158,11 +163,16 @@ def test_retry_on_a_failed_document_reruns_the_pipeline_from_the_stored_file(mon
     assert new_chunk_ids.isdisjoint(stale_chunk_ids)  # the stale chunk was cleared, not kept
 
 
-def test_retry_is_rejected_with_409_when_the_document_is_not_currently_failed() -> None:
+def test_retry_is_rejected_with_409_when_the_document_is_not_currently_failed(monkeypatch) -> None:
+    _patch_index_document(monkeypatch, _FakeEmbeddingProvider())
     client = _admin_client()
     created = client.post(
         "/documents", files={"file": ("still-processing.txt", b"left alone", "text/plain")}
     ).json()
+    # The autouse fixture makes upload's own processing run synchronously
+    # to completion, so with a working provider the document is 'ready',
+    # not 'failed' -- exactly the state 'retry' must reject with 409.
+    assert _document_row(uuid.UUID(created["id"])).status == "ready"
 
     response = client.post(f"/documents/{created['id']}/reprocess", json={"mode": "retry"})
 
@@ -205,7 +215,8 @@ def test_reindex_on_a_ready_document_rebuilds_chunks_and_stays_queryable(monkeyp
     _patch_index_document(monkeypatch, _FakeEmbeddingProvider())
     client = _admin_client()
     created = client.post(
-        "/documents", files={"file": ("reindex-me.txt", b"some real reindexable body text", "text/plain")}
+        "/documents",
+        files={"file": ("reindex-me.txt", b"some real reindexable body text", "text/plain")},
     ).json()
     doc_id = uuid.UUID(created["id"])
     process_document(doc_id)  # -> 'ready' with its first generation of chunks
