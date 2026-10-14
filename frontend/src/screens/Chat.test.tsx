@@ -22,9 +22,10 @@ function err(status: number, detail: string) {
 type FetchOpts = {
   conversations?: Array<{ id: string; title?: string | null }>;
   conversationDetail?: Record<string, { id: string; title?: string | null; messages?: unknown[] }>;
-  chatResponder?: (
-    body: { conversation_id?: string; question: string },
-  ) => Promise<unknown> | unknown;
+  chatResponder?: (body: {
+    conversation_id?: string;
+    question: string;
+  }) => Promise<unknown> | unknown;
   chatShouldFail?: boolean;
 };
 
@@ -164,9 +165,7 @@ describe("Chat screen", () => {
     // Composer stays enabled and usable for a retry.
     const textarea = screen.getByPlaceholderText("Ask a question…") as HTMLTextAreaElement;
     expect(textarea).not.toBeDisabled();
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /send/i })).toBeInTheDocument(),
-    );
+    await waitFor(() => expect(screen.getByRole("button", { name: /send/i })).toBeInTheDocument());
   });
 
   it("AC-063: a failed answer leaves the user's existing question on screen intact", async () => {
@@ -180,7 +179,9 @@ describe("Chat screen", () => {
     await user.click(screen.getByRole("button", { name: /send/i }));
 
     const alert = await screen.findByRole("alert");
-    expect(within(alert.closest("section") ?? document.body).getAllByText("Will this fail?").length).toBeGreaterThan(0);
+    expect(
+      within(alert.closest("section") ?? document.body).getAllByText("Will this fail?").length,
+    ).toBeGreaterThan(0);
   });
 
   it("a follow-up question posts to the same conversation id and renders the new turn's citations", async () => {
@@ -257,9 +258,7 @@ describe("Chat screen", () => {
     await user.type(screen.getByPlaceholderText("Ask a question…"), "Slow question");
     await user.click(screen.getByRole("button", { name: /send/i }));
 
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: /sending/i })).toBeDisabled(),
-    );
+    await waitFor(() => expect(screen.getByRole("button", { name: /sending/i })).toBeDisabled());
 
     expect(countChatPosts(fetchMock)).toBe(1);
 

@@ -225,10 +225,7 @@ export default function Chat() {
 
       <section className="flex flex-1 flex-col gap-4 p-6">
         <div>
-          <h1
-            className="text-lg font-semibold"
-            style={{ fontFamily: "var(--brand-font-heading)" }}
-          >
+          <h1 className="text-lg font-semibold" style={{ fontFamily: "var(--brand-font-heading)" }}>
             {"Chat"}
           </h1>
           <p className="text-sm text-[var(--brand-fg-muted)]">
