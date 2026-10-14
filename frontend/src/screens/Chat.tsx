@@ -90,9 +90,7 @@ export default function Chat() {
   // US-023-1: which citation's source panel is open, if any, and the chip
   // that opened it -- so closing the panel returns focus to exactly where
   // the user's keyboard was (AC-057).
-  const [selectedCitation, setSelectedCitation] = React.useState<SourcePanelCitation | null>(
-    null,
-  );
+  const [selectedCitation, setSelectedCitation] = React.useState<SourcePanelCitation | null>(null);
   const selectedChipRef = React.useRef<HTMLButtonElement | null>(null);
 
   const loadConversations = React.useCallback(async () => {
@@ -146,13 +144,10 @@ export default function Chat() {
   // already open just swaps which citation it shows -- the conversation
   // thread, scroll position and composer input are untouched either way,
   // since this only ever updates local selection state.
-  const handleSelectCitation = React.useCallback(
-    (citation: Citation, chip: HTMLButtonElement) => {
-      selectedChipRef.current = chip;
-      setSelectedCitation(citation);
-    },
-    [],
-  );
+  const handleSelectCitation = React.useCallback((citation: Citation, chip: HTMLButtonElement) => {
+    selectedChipRef.current = chip;
+    setSelectedCitation(citation);
+  }, []);
 
   const closeSourcePanel = React.useCallback(() => {
     setSelectedCitation(null);
@@ -350,9 +345,7 @@ export default function Chat() {
                           <button
                             key={citation.chunk_id}
                             type="button"
-                            onClick={(e) =>
-                              handleSelectCitation(citation, e.currentTarget)
-                            }
+                            onClick={(e) => handleSelectCitation(citation, e.currentTarget)}
                             aria-label={`Source ${citation.number}: ${
                               citation.filename ?? "Untitled document"
                             }`}

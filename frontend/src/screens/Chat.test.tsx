@@ -570,7 +570,9 @@ describe("Chat screen", () => {
         const path = u.pathname;
         const method = (init?.method ?? "GET").toUpperCase();
         if (/^\/documents\/[^/]+\/download$/.test(path) && method === "GET") {
-          const headers = new Headers({ "Content-Disposition": 'attachment; filename="alpha.txt"' });
+          const headers = new Headers({
+            "Content-Disposition": 'attachment; filename="alpha.txt"',
+          });
           return Promise.resolve({
             ok: true,
             status: 200,
@@ -585,11 +587,11 @@ describe("Chat screen", () => {
       await screen.findByRole("dialog");
 
       let downloadAttr = "";
-      const clickSpy = vi
-        .spyOn(HTMLAnchorElement.prototype, "click")
-        .mockImplementation(function (this: HTMLAnchorElement) {
-          downloadAttr = this.download;
-        });
+      const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+        this: HTMLAnchorElement,
+      ) {
+        downloadAttr = this.download;
+      });
 
       await user.click(screen.getByRole("button", { name: /download original/i }));
 
