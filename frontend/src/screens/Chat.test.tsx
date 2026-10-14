@@ -64,6 +64,7 @@ function makeFetch(opts: FetchOpts = {}) {
       return ok({
         conversation_id: body.conversation_id,
         answer: "The answer is 42.",
+        from_documents: true,
         citations: [
           {
             number: 1,
@@ -118,7 +119,7 @@ describe("Chat screen", () => {
           title: "Prior chat",
           messages: [
             { id: "m1", role: "user", content: "What is the policy?" },
-            { id: "m2", role: "assistant", content: "It is this.", citations: [] },
+            { id: "m2", role: "assistant", content: "It is this.", from_documents: false, citations: [] },
           ],
         },
       },
@@ -148,6 +149,133 @@ describe("Chat screen", () => {
     expect(screen.getByText(/source\.pdf/i)).toBeInTheDocument();
   });
 
+  it("AC-052/AC-053: a grounded answer shows 'From your documents' and one numbered chip per citation", async () => {
+    const { fetchMock } = makeFetch({
+      conversations: [],
+      chatResponder: (body) => ({
+        conversation_id: body.conversation_id,
+        answer: "Grounded answer [1][2].",
+        from_documents: true,
+        citations: [
+          {
+            number: 1,
+            document_id: "doc-1",
+            chunk_id: "chunk-1",
+            filename: "alpha.txt",
+            score: 0.9,
+          },
+          {
+            number: 2,
+            document_id: "doc-2",
+            chunk_id: "chunk-2",
+            filename: "beta.md",
+            score: 0.85,
+          },
+        ],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<Chat />);
+
+    await waitFor(() => expect(screen.getByText("No messages yet")).toBeInTheDocument());
+    await user.type(screen.getByPlaceholderText("Ask a question…"), "Grounded?");
+    await user.click(screen.getByRole("button", { name: /send/i }));
+
+    await screen.findByText("Grounded answer [1][2].");
+    expect(screen.getByText("From your documents")).toBeInTheDocument();
+
+    const chip1 = screen.getByRole("button", { name: /source 1: alpha\.txt/i });
+    const chip2 = screen.getByRole("button", { name: /source 2: beta\.md/i });
+    expect(chip1).toBeInTheDocument();
+    expect(chip2).toBeInTheDocument();
+
+    // Chips are real, focusable, keyboard-activatable buttons.
+    chip1.focus();
+    expect(chip1).toHaveFocus();
+    await user.keyboard("{Enter}");
+  });
+
+  it("AC-058/AC-059: a fallback answer shows 'Not from your documents' and renders no chips", async () => {
+    const { fetchMock } = makeFetch({
+      conversations: [],
+      chatResponder: (body) => ({
+        conversation_id: body.conversation_id,
+        answer: "Fallback answer with no grounding.",
+        from_documents: false,
+        citations: [],
+      }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<Chat />);
+
+    await waitFor(() => expect(screen.getByText("No messages yet")).toBeInTheDocument());
+    await user.type(screen.getByPlaceholderText("Ask a question…"), "Not grounded?");
+    await user.click(screen.getByRole("button", { name: /send/i }));
+
+    await screen.findByText("Fallback answer with no grounding.");
+    expect(screen.getByText("Not from your documents")).toBeInTheDocument();
+    expect(screen.queryByText("From your documents")).not.toBeInTheDocument();
+    expect(screen.queryByRole("group", { name: "Sources" })).not.toBeInTheDocument();
+  });
+
+  it("AC-054: opening a stored conversation restores persisted badge state and numbered chips", async () => {
+    const { fetchMock } = makeFetch({
+      conversations: [{ id: "conv-1", title: "Prior chat" }],
+      conversationDetail: {
+        "conv-1": {
+          id: "conv-1",
+          title: "Prior chat",
+          messages: [
+            { id: "m1", role: "user", content: "What is the policy?" },
+            {
+              id: "m2",
+              role: "assistant",
+              content: "Grounded stored answer [1].",
+              from_documents: true,
+              citations: [
+                {
+                  number: 1,
+                  document_id: "doc-1",
+                  chunk_id: "chunk-1",
+                  filename: "policy.txt",
+                  score: 0.91,
+                },
+              ],
+            },
+            {
+              id: "m3",
+              role: "user",
+              content: "And off topic?",
+            },
+            {
+              id: "m4",
+              role: "assistant",
+              content: "Fallback stored answer.",
+              from_documents: false,
+              citations: [],
+            },
+          ],
+        },
+      },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<Chat />);
+
+    await screen.findByText("Prior chat");
+    await userEvent.setup().click(screen.getByText("Prior chat"));
+
+    await waitFor(() =>
+      expect(screen.getByText("Grounded stored answer [1].")).toBeInTheDocument(),
+    );
+    expect(screen.getByText("From your documents")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /source 1: policy\.txt/i })).toBeInTheDocument();
+
+    expect(screen.getByText("Fallback stored answer.")).toBeInTheDocument();
+    expect(screen.getByText("Not from your documents")).toBeInTheDocument();
+  });
+
   it("AC-061: a provider error renders inline, does not blank the page, and the composer stays usable", async () => {
     const { fetchMock } = makeFetch({ conversations: [], chatShouldFail: true });
     vi.stubGlobal("fetch", fetchMock);
@@ -166,6 +294,10 @@ describe("Chat screen", () => {
     const textarea = screen.getByPlaceholderText("Ask a question…") as HTMLTextAreaElement;
     expect(textarea).not.toBeDisabled();
     await waitFor(() => expect(screen.getByRole("button", { name: /send/i })).toBeInTheDocument());
+
+    // AC-059-adjacent: an error turn carries no badge and no citation affordance.
+    expect(screen.queryByText("From your documents")).not.toBeInTheDocument();
+    expect(screen.queryByText("Not from your documents")).not.toBeInTheDocument();
   });
 
   it("AC-063: a failed answer leaves the user's existing question on screen intact", async () => {
@@ -193,6 +325,7 @@ describe("Chat screen", () => {
         return {
           conversation_id: body.conversation_id,
           answer: `Answer to: ${body.question}`,
+          from_documents: true,
           citations: [
             {
               number: 1,
@@ -243,6 +376,7 @@ describe("Chat screen", () => {
           json: async () => ({
             conversation_id: "conv-1",
             answer: "Final answer",
+            from_documents: false,
             citations: [],
           }),
         }));

@@ -118,7 +118,10 @@ class ChatRequest(BaseModel):
 
 
 class CitationOut(BaseModel):
-    """One retrieved chunk cited in a chat answer."""
+    """One retrieved chunk cited in a chat answer. `score` is only ever
+    populated on the fresh `POST /chat` response -- a citation rebuilt from
+    a persisted `Citation` row (no `score` column, by design: see
+    `app/models.py`) always carries `score=None`."""
 
     number: int
     document_id: uuid.UUID
@@ -127,20 +130,63 @@ class CitationOut(BaseModel):
     page_ref: int | None = None
     section_ref: str | None = None
     text_preview: str | None = None
-    score: float
+    score: float | None = None
+
+    model_config = {"from_attributes": True}
 
 
 class ChatResponse(BaseModel):
     """POST /chat's response (contract): retrieval (AC-049/AC-050) has
-    already run by the time this is built. `answer` is a placeholder until
-    US-042-1 wires in real generation; `citations` is never more than what
-    retrieval actually returned, and is empty exactly when retrieval found
-    nothing at or above the in-force threshold."""
+    already run by the time this is built. `citations` is never more than
+    what retrieval actually returned, and is empty exactly when retrieval
+    found nothing at or above the in-force threshold (AC-059)."""
 
     conversation_id: str
     answer: str
     from_documents: bool
     citations: list[CitationOut] = Field(default_factory=list)
+
+
+class MessageOut(BaseModel):
+    """One persisted message within a conversation (contract): the answer
+    text, whether it was grounded in documents, and the numbered citations
+    that back it -- identical to what `POST /chat` returned at the time it
+    was generated (AC-054)."""
+
+    id: uuid.UUID
+    role: str
+    content: str
+    from_documents: bool
+    citations: list[CitationOut] = Field(default_factory=list)
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ConversationSummaryOut(BaseModel):
+    """One row of `GET /conversations` (contract): newest first, scoped to
+    the signed-in caller."""
+
+    id: uuid.UUID
+    title: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ConversationDetailOut(BaseModel):
+    """`GET /conversations/{id}` (contract): the conversation plus every
+    message, in order, each with the identical numbered citations it was
+    persisted with."""
+
+    id: uuid.UUID
+    title: str | None = None
+    messages: list[MessageOut] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
 
 
 class SettingsOut(BaseModel):

@@ -5,7 +5,7 @@ import * as UI from "@/lib/ui";
 import { Icons } from "@/lib/icons";
 
 const { Button, Textarea, Card, CardContent, Badge, Empty } = UI;
-const { Plus, ArrowRight, AlertCircle, FileText } = Icons;
+const { Plus, ArrowRight, AlertCircle, FileText, CheckCircle } = Icons;
 
 type Citation = {
   number: number;
@@ -23,6 +23,7 @@ type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   citations?: Citation[];
+  fromDocuments?: boolean;
   isError?: boolean;
 };
 
@@ -32,15 +33,27 @@ type ConversationSummary = {
   updated_at?: string | null;
 };
 
+// Shape a persisted message carries over the wire (US-022-1 contract) --
+// `from_documents` is the server's badge state for that turn, stored once
+// and never recomputed on the client.
+type PersistedMessage = {
+  id?: string;
+  role: "user" | "assistant";
+  content: string;
+  citations?: Citation[];
+  from_documents?: boolean;
+};
+
 type ConversationDetail = {
   id: string;
   title?: string | null;
-  messages?: ChatMessage[];
+  messages?: PersistedMessage[];
 };
 
 type ChatApiResponse = {
   conversation_id: string;
   answer: string;
+  from_documents: boolean;
   citations: Citation[];
 };
 
@@ -101,6 +114,9 @@ export default function Chat() {
           role: message.role,
           content: message.content,
           citations: message.citations,
+          // AC-054: the badge state restored on reload is exactly what was
+          // persisted with the message, not recomputed from citations.
+          fromDocuments: message.from_documents,
         })),
       );
       setDetailState("loaded");
@@ -115,6 +131,12 @@ export default function Chat() {
     setDetailState("idle");
     setInput("");
   };
+
+  // Hook point for US-023-1's source panel. Selecting a chip does nothing
+  // observable yet -- opening the panel is that ticket's work, not this one's.
+  const handleSelectCitation = React.useCallback((_citation: Citation) => {
+    // intentionally empty
+  }, []);
 
   const handleSend = async (event?: React.FormEvent) => {
     event?.preventDefault();
@@ -153,6 +175,7 @@ export default function Chat() {
         role: "assistant",
         content: response.answer,
         citations: response.citations,
+        fromDocuments: response.from_documents,
       };
       // AC-063: the failure path below never touches this branch, and this
       // branch never removes anything already on screen -- messages only
@@ -254,44 +277,78 @@ export default function Chat() {
             ) : messages.length === 0 ? (
               <Empty title="No messages yet" description="Ask a question below to get started." />
             ) : (
-              messages.map((message) => (
-                <div
-                  key={message.id}
-                  className="flex flex-col gap-1"
-                  style={{ alignItems: message.role === "user" ? "flex-end" : "flex-start" }}
-                >
+              messages.map((message) => {
+                const isAssistant = message.role === "assistant" && !message.isError;
+                // AC-052/AC-058: the two badge states are mutually exclusive
+                // and only ever shown on a real (non-error) assistant turn.
+                const groundedChips =
+                  isAssistant && message.fromDocuments && message.citations
+                    ? message.citations
+                    : [];
+                return (
                   <div
-                    role={message.isError ? "alert" : undefined}
-                    className="max-w-xl rounded-[var(--brand-radius)] px-3 py-2 text-sm"
-                    style={{
-                      backgroundColor: message.isError
-                        ? "rgba(248, 113, 113, 0.12)"
-                        : message.role === "user"
-                          ? "var(--brand-hover)"
-                          : "var(--brand-surface)",
-                      color: message.isError ? "#f87171" : "inherit",
-                      border: "1px solid var(--brand-border)",
-                    }}
+                    key={message.id}
+                    className="flex flex-col gap-1"
+                    style={{ alignItems: message.role === "user" ? "flex-end" : "flex-start" }}
                   >
-                    {message.isError ? (
-                      <span className="flex items-center gap-1">
-                        <AlertCircle size={14} /> {message.content}
-                      </span>
-                    ) : (
-                      message.content
-                    )}
-                  </div>
-                  {message.citations && message.citations.length > 0 ? (
-                    <div className="flex flex-wrap gap-1">
-                      {message.citations.map((citation) => (
-                        <Badge key={citation.chunk_id} variant="default">
-                          <FileText size={10} /> {citation.filename ?? `Source ${citation.number}`}
-                        </Badge>
-                      ))}
+                    <div
+                      role={message.isError ? "alert" : undefined}
+                      className="max-w-xl rounded-[var(--brand-radius)] px-3 py-2 text-sm"
+                      style={{
+                        backgroundColor: message.isError
+                          ? "rgba(248, 113, 113, 0.12)"
+                          : message.role === "user"
+                            ? "var(--brand-hover)"
+                            : "var(--brand-surface)",
+                        color: message.isError ? "#f87171" : "inherit",
+                        border: "1px solid var(--brand-border)",
+                      }}
+                    >
+                      {message.isError ? (
+                        <span className="flex items-center gap-1">
+                          <AlertCircle size={14} /> {message.content}
+                        </span>
+                      ) : (
+                        message.content
+                      )}
                     </div>
-                  ) : null}
-                </div>
-              ))
+                    {isAssistant ? (
+                      message.fromDocuments ? (
+                        <Badge variant="success" className="flex items-center gap-1">
+                          <CheckCircle size={10} /> {"From your documents"}
+                        </Badge>
+                      ) : (
+                        <Badge variant="warning" className="flex items-center gap-1">
+                          <AlertCircle size={10} /> {"Not from your documents"}
+                        </Badge>
+                      )
+                    ) : null}
+                    {groundedChips.length > 0 ? (
+                      <div
+                        role="group"
+                        aria-label="Sources"
+                        className="flex flex-wrap gap-1"
+                      >
+                        {groundedChips.map((citation) => (
+                          <button
+                            key={citation.chunk_id}
+                            type="button"
+                            onClick={() => handleSelectCitation(citation)}
+                            aria-label={`Source ${citation.number}: ${
+                              citation.filename ?? "Untitled document"
+                            }`}
+                            className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-colors hover:bg-[var(--brand-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-primary)]"
+                            style={{ borderColor: "var(--brand-border)" }}
+                          >
+                            <FileText size={10} />
+                            {citation.number}. {citation.filename ?? `Source ${citation.number}`}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })
             )}
           </CardContent>
         </Card>
