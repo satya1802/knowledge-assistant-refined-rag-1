@@ -21,6 +21,10 @@ function err(status: number, detail: string) {
 
 type FetchOpts = {
   conversations?: Array<{ id: string; title?: string | null; updated_at?: string | null }>;
+  conversationsByQuery?: Record<
+    string,
+    Array<{ id: string; title?: string | null; updated_at?: string | null }>
+  >;
   conversationDetail?: Record<string, { id: string; title?: string | null; messages?: unknown[] }>;
   chatResponder?: (body: {
     conversation_id?: string;
@@ -29,6 +33,7 @@ type FetchOpts = {
   chatShouldFail?: boolean;
   downloadHeaders?: Record<string, string>;
   downloadOk?: boolean;
+  deleteShouldFail?: boolean;
 };
 
 function makeFetch(opts: FetchOpts = {}) {
@@ -44,6 +49,10 @@ function makeFetch(opts: FetchOpts = {}) {
     calls.push({ path, method, body });
 
     if (path === "/conversations" && method === "GET") {
+      const q = u.searchParams.get("q");
+      if (q !== null && opts.conversationsByQuery) {
+        return ok(opts.conversationsByQuery[q] ?? []);
+      }
       return ok(opts.conversations ?? []);
     }
     if (path === "/conversations" && method === "POST") {
@@ -52,6 +61,12 @@ function makeFetch(opts: FetchOpts = {}) {
       return ok({ id, title: body?.title ?? null });
     }
     const detailMatch = /^\/conversations\/([^/]+)$/.exec(path);
+    if (detailMatch && method === "DELETE") {
+      if (opts.deleteShouldFail) {
+        return err(500, "Could not delete that conversation.");
+      }
+      return Promise.resolve({ ok: true, status: 204, json: async () => undefined });
+    }
     if (detailMatch && method === "GET") {
       const id = detailMatch[1];
       const detail = opts.conversationDetail?.[id] ?? { id, messages: [] };
@@ -744,6 +759,147 @@ describe("Chat screen", () => {
 
       const detailCall = findCall(fetchMock, (url) => url.endsWith("/conversations/conv-today"));
       expect(detailCall).toBeTruthy();
+    });
+  });
+
+  describe("history search and delete (US-030-2)", () => {
+    it("AC-073: typing in the search box debounces a GET /conversations?q= request and shows only matches", async () => {
+      const { fetchMock } = makeFetch({
+        conversations: [{ id: "conv-1", title: "Alpha chat", updated_at: hoursAgoIso(1) }],
+        conversationsByQuery: {
+          budget: [{ id: "conv-2", title: "Budget chat", updated_at: hoursAgoIso(1) }],
+        },
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const user = userEvent.setup();
+      render(<Chat />);
+
+      await screen.findByText("Alpha chat");
+
+      await user.type(screen.getByLabelText("Search conversations"), "budget");
+
+      await waitFor(() => expect(screen.getByText("Budget chat")).toBeInTheDocument());
+      expect(screen.queryByText("Alpha chat")).not.toBeInTheDocument();
+
+      const call = findCall(fetchMock, (url) => url.includes("/conversations?q=budget"));
+      expect(call).toBeTruthy();
+    });
+
+    it("AC-074: an empty filtered result renders 'No conversations found' instead of the groups", async () => {
+      const { fetchMock } = makeFetch({
+        conversations: [{ id: "conv-1", title: "Alpha chat", updated_at: hoursAgoIso(1) }],
+        conversationsByQuery: { zzz: [] },
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const user = userEvent.setup();
+      render(<Chat />);
+
+      await screen.findByText("Alpha chat");
+      await user.type(screen.getByLabelText("Search conversations"), "zzz");
+
+      await screen.findByText("No conversations found");
+      expect(screen.queryByText("Alpha chat")).not.toBeInTheDocument();
+      expect(screen.queryByText("Previous Conversations")).not.toBeInTheDocument();
+    });
+
+    it("AC-074: clearing the search restores the full conversation list", async () => {
+      const { fetchMock } = makeFetch({
+        conversations: [{ id: "conv-1", title: "Alpha chat", updated_at: hoursAgoIso(1) }],
+        conversationsByQuery: { zzz: [] },
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const user = userEvent.setup();
+      render(<Chat />);
+
+      await screen.findByText("Alpha chat");
+      await user.type(screen.getByLabelText("Search conversations"), "zzz");
+      await screen.findByText("No conversations found");
+
+      await user.click(screen.getByRole("button", { name: /clear search/i }));
+
+      await screen.findByText("Alpha chat");
+      expect(screen.queryByText("No conversations found")).not.toBeInTheDocument();
+    });
+
+    it("AC-077: the Delete control is keyboard-reachable and does not open the conversation", async () => {
+      const { fetchMock } = makeFetch({
+        conversations: [{ id: "conv-1", title: "Alpha chat", updated_at: hoursAgoIso(1) }],
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const user = userEvent.setup();
+      render(<Chat />);
+
+      await screen.findByText("Alpha chat");
+      const deleteButton = screen.getByRole("button", { name: /delete alpha chat/i });
+      deleteButton.focus();
+      expect(deleteButton).toHaveFocus();
+      await user.keyboard("{Enter}");
+
+      await screen.findByText(/delete "alpha chat"/i);
+      // Activating Delete never opened the conversation thread.
+      expect(screen.getByText("No messages yet")).toBeInTheDocument();
+    });
+
+    it("AC-077: Cancel removes nothing and leaves the list unchanged", async () => {
+      const { fetchMock } = makeFetch({
+        conversations: [{ id: "conv-1", title: "Alpha chat", updated_at: hoursAgoIso(1) }],
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const user = userEvent.setup();
+      render(<Chat />);
+
+      await screen.findByText("Alpha chat");
+      await user.click(screen.getByRole("button", { name: /delete alpha chat/i }));
+      await screen.findByText(/delete "alpha chat"/i);
+
+      await user.click(screen.getByRole("button", { name: /^cancel$/i }));
+
+      expect(screen.getByText("Alpha chat")).toBeInTheDocument();
+      expect(fetchMock.mock.calls.some(([, init]) => init?.method === "DELETE")).toBe(false);
+    });
+
+    it("AC-078: confirming issues DELETE /conversations/{id} and removes the row, resetting an open thread", async () => {
+      const { fetchMock } = makeFetch({
+        conversations: [{ id: "conv-1", title: "Alpha chat", updated_at: hoursAgoIso(1) }],
+        conversationDetail: { "conv-1": { id: "conv-1", title: "Alpha chat", messages: [] } },
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const user = userEvent.setup();
+      render(<Chat />);
+
+      await screen.findByText("Alpha chat");
+      await user.click(screen.getByText("Alpha chat"));
+      await waitFor(() => expect(screen.getByText("No messages yet")).toBeInTheDocument());
+
+      await user.click(screen.getByRole("button", { name: /delete alpha chat/i }));
+      await screen.findByText(/delete "alpha chat"/i);
+      await user.click(screen.getByRole("button", { name: /^confirm$/i }));
+
+      await waitFor(() => expect(screen.queryByText("Alpha chat")).not.toBeInTheDocument());
+      const deleteCall = findCall(
+        fetchMock,
+        (url, init) => url.endsWith("/conversations/conv-1") && init?.method === "DELETE",
+      );
+      expect(deleteCall).toBeTruthy();
+      expect(screen.getByText("No messages yet")).toBeInTheDocument();
+    });
+
+    it("a failed delete surfaces an inline alert and leaves the conversation in the list", async () => {
+      const { fetchMock } = makeFetch({
+        conversations: [{ id: "conv-1", title: "Alpha chat", updated_at: hoursAgoIso(1) }],
+        deleteShouldFail: true,
+      });
+      vi.stubGlobal("fetch", fetchMock);
+      const user = userEvent.setup();
+      render(<Chat />);
+
+      await screen.findByText("Alpha chat");
+      await user.click(screen.getByRole("button", { name: /delete alpha chat/i }));
+      await screen.findByText(/delete "alpha chat"/i);
+      await user.click(screen.getByRole("button", { name: /^confirm$/i }));
+
+      await screen.findByRole("alert");
+      expect(screen.getByText("Alpha chat")).toBeInTheDocument();
     });
   });
 });
