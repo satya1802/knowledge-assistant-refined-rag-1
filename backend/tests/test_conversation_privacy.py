@@ -158,9 +158,7 @@ def test_each_signed_in_user_lists_exactly_their_own_conversations_and_none_of_t
 # --------------------------------------------------------------------- #
 
 
-def test_a_conversation_belonging_to_another_user_is_refused_to_a_stranger_and_an_admin_alike_with_no_message_content_leaked() -> (
-    None
-):
+def test_conversation_belonging_to_another_user_is_refused_with_no_content_leaked() -> None:
     owner = _seed_user(_unique_email("privacy-owner"))
     stranger = _seed_user(_unique_email("privacy-stranger"))
     admin = _seed_user(_unique_email("privacy-admin"), role="admin")
@@ -211,9 +209,7 @@ def test_an_administrator_cannot_list_another_users_conversation_either() -> Non
     assert owned_id not in [row["id"] for row in admin_listing.json()]
 
 
-def test_a_conversation_belonging_to_another_user_cannot_be_deleted_and_still_exists_afterwards() -> (
-    None
-):
+def test_conversation_belonging_to_another_user_cannot_be_deleted() -> None:
     """AC-076: DELETE /conversations/{id} on another user's conversation is
     refused (404, never 403) and the record -- and its message content --
     still exists, both in the database directly and via the owner's own
