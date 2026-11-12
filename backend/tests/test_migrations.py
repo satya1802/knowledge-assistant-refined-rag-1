@@ -4,10 +4,10 @@
 
 from pathlib import Path
 
-from alembic.config import Config
 from sqlalchemy import create_engine, text
 
 from alembic import command
+from alembic.config import Config
 
 _BACKEND_DIR = Path(__file__).resolve().parent.parent
 

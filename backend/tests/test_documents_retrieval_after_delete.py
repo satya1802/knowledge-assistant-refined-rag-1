@@ -92,7 +92,13 @@ def test_a_chunk_belonging_to_a_deleted_document_is_no_longer_queryable_or_citab
     client = _admin_client()
     created = client.post(
         "/documents",
-        files={"file": ("citeable-then-deleted.txt", b"some real citeable body text", "text/plain")},
+        files={
+            "file": (
+                "citeable-then-deleted.txt",
+                b"some real citeable body text",
+                "text/plain",
+            )
+        },
     ).json()
     doc_id = uuid.UUID(created["id"])
     process_document(doc_id)  # drives it to 'ready' with real, embedded chunks
